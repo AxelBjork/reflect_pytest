@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "socket_bus.hpp"  // brings in traits.hpp → messages.hpp
+#include "socket_bus.h"  // brings in traits.hpp → messages.hpp
 
 namespace ipc {
 

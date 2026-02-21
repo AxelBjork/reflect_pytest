@@ -5,23 +5,22 @@ set(CMAKE_CXX_STANDARD 26)  # Requires gcc trunk natively
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_compile_options(-freflection)
-
 # ── IPC library ───────────────────────────────────────────────────────────────
 add_library(ipc STATIC
     src/socket_bus.cpp
     src/message_bus.cpp
     src/udp_bridge.cpp
 )
-target_include_directories(ipc PUBLIC include)
+target_include_directories(ipc PUBLIC src messages)
 
 # ── SIL application ───────────────────────────────────────────────────────────
 add_executable(sil_app src/main.cpp src/logger.cpp)
 target_link_libraries(sil_app PRIVATE ipc)
 
-# ── Python Generator ──────────────────────────────────────────────────────────
-add_executable(generate_bindings src/generate_bindings.cpp)
-target_link_libraries(generate_bindings PRIVATE ipc)
+# ── Python Generator (only this target needs -freflection) ────────────────────
+add_executable(generate_bindings generator/generate_bindings.cpp)
+target_include_directories(generate_bindings PRIVATE generator src messages)
+target_compile_options(generate_bindings PRIVATE -freflection)
 
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py

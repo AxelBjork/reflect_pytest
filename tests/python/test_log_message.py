@@ -47,23 +47,31 @@ def test_intercept_hello_world(udp):
 
 
 def test_inject_hello_world(udp):
-    """Send our own Hello World; bridge injects it and echoes it back."""
+    """Send our own Hello World; bridge injects it and echoes it back.
+     UDP may drop packets, so resend periodically and check with a short timeout.
+    """
     sent = LogPayload(
         text=b"Hello World from pytest\x00",
         severity=Severity.Info,
         component=ComponentId.Test,
     )
-    udp.send_msg(MsgId.Log, sent)
 
-    # Drain messages until we see our own (the bridge may echo C++ messages).
+    # Temporarily shorten socket block so we can poll quickly and resend.
+    udp._sock.settimeout(0.1)
     deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        try:
-            log = udp.recv_msg(expected_id=MsgId.Log)
-        except TimeoutError:
-            break
-        if b"Hello World from pytest" in log.text and log.component == ComponentId.Test:
-            return  # found it
+
+    try:
+        while time.monotonic() < deadline:
+            udp.send_msg(MsgId.Log, sent)
+            try:
+                # Drain messages quickly
+                log = udp.recv_msg(expected_id=MsgId.Log)
+                if b"Hello World from pytest" in log.text and log.component == ComponentId.Test:
+                    return  # found it
+            except TimeoutError:
+                pass
+    finally:
+        udp._sock.settimeout(5.0)
 
     pytest.fail(
         "Did not receive injected 'Hello World from pytest' back over UDP")

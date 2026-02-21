@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "traits.hpp"  // brings in messages.hpp + MessageTraits<>
+#include "traits.h"  // brings in messages.hpp + MessageTraits<>
 
 namespace ipc {
 

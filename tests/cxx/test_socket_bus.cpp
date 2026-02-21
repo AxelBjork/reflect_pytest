@@ -8,8 +8,8 @@
 #include <optional>
 #include <thread>
 
-#include "ipc/socket_bus.hpp"
-#include "ipc/traits.hpp"
+#include "socket_bus.h"
+#include "traits.h"
 
 using namespace ipc;
 

@@ -1,6 +1,6 @@
 // src/logger.cpp
 
-#include "logger.hpp"
+#include "logger.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -10,8 +10,8 @@
 #include <queue>
 #include <thread>
 
-#include "ipc/message_bus.hpp"
-#include "ipc/messages.hpp"
+#include "message_bus.h"
+#include "messages.h"
 
 namespace sil {
 

@@ -62,7 +62,7 @@ def pytest_sessionstart(session):
             )
             # 2. CMake Build
             subprocess.run(
-                ["cmake", "--build", str(_BUILD_DIR)],
+                ["cmake", "--build", str(_BUILD_DIR), "--", "-j8"],
                 cwd=_REPO_ROOT,
                 check=True,
             )

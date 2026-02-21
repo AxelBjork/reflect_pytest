@@ -1,7 +1,7 @@
 #pragma once
 #include <memory>
 
-#include "ipc/message_bus.hpp"
+#include "message_bus.h"
 
 namespace sil {
 // Opaque pointer wrapper to prevent dragging `<mutex>` into main

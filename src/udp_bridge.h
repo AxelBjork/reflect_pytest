@@ -10,7 +10,7 @@
 #include <mutex>
 #include <thread>
 
-#include "message_bus.hpp"
+#include "message_bus.h"
 
 namespace ipc {
 

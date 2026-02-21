@@ -1,6 +1,6 @@
 // ipc/socket_bus.cpp — AF_UNIX SOCK_DGRAM implementation.
 
-#include "ipc/socket_bus.hpp"
+#include "socket_bus.h"
 
 #include <sys/socket.h>
 #include <sys/un.h>

@@ -12,9 +12,9 @@
 #include <cstring>
 #include <thread>
 
-#include "ipc/message_bus.hpp"
-#include "ipc/udp_bridge.hpp"
-#include "logger.hpp"
+#include "message_bus.h"
+#include "udp_bridge.h"
+#include "logger.h"
 
 static std::atomic<bool> g_running{true};
 
@@ -49,7 +49,7 @@ int main() {
 
   // ── Hello World loop ──────────────────────────────────────────────────────
   while (g_running) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     if (!g_running) break;
 
     ipc::LogPayload p{};
