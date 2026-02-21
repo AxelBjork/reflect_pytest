@@ -3,9 +3,11 @@
 // Threads:
 //   main         — waits on g_running (futex); zero CPU until signal
 //   heartbeat    — publishes "Hello World #N" every 500 ms; wakes on shutdown
+//   sim-exec     — inside Simulator: steps through MotorSubCmds in real time
+//   sim-log      — inside Simulator: logs status every 1 000 ms
 //   bus-listener — inside MessageBus: AF_UNIX recv → dispatch
-//   logger        — dedicated: prints every LogMessage
-//   bridge-rx     — inside UdpBridge: UDP recv → bus inject
+//   logger       — dedicated: prints every LogMessage
+//   bridge-rx    — inside UdpBridge: UDP recv → bus inject
 
 #include <atomic>
 #include <condition_variable>
@@ -16,6 +18,7 @@
 
 #include "logger.h"
 #include "message_bus.h"
+#include "simulator.h"
 #include "udp_bridge.h"
 
 static std::atomic<bool> g_running{true};
@@ -34,30 +37,19 @@ int main() {
 
   ipc::MessageBus bus(kSockPath);
 
-  // ── Logger thread ─────────────────────────────────────────────────────────
   auto logger = sil::create_logger(bus);
-
-  // ── QueryState Handler ────────────────────────────────────────────────────
-  bus.subscribe(ipc::MsgId::QueryState, [&bus](ipc::RawMessage msg) {
-    if (msg.payload.size() != sizeof(ipc::QueryStatePayload)) return;
-    ipc::QueryStatePayload response{};
-    response.state = ipc::SystemState::Ready;
-    bus.publish<ipc::MsgId::QueryState>(response);
-  });
-
-  // ── UDP bridge ────────────────────────────────────────────────────────────
+  sil::Simulator simulator(bus);  // handles QueryState, MotorSequence, Kinematics/Power
   ipc::UdpBridge bridge(bus, kUdpPort);
 
   std::printf("[sil_app] started (UDP bridge on :%u, bus on %s)\n", kUdpPort, kSockPath);
   std::fflush(stdout);
 
-  // ── Heartbeat thread — prints "Hello World #N" every 500 ms ──────────────
-  // Uses an interruptible wait so shutdown is immediate regardless of cadence.
+  // ── Heartbeat thread ──────────────────────────────────────────────────────
   std::mutex hb_mu;
   std::condition_variable hb_cv;
 
   std::thread heartbeat([&] {
-    uint32_t count = 0;
+    uint32_t n = 0;
     while (true) {
       {
         std::unique_lock lk{hb_mu};
@@ -65,25 +57,21 @@ int main() {
                        [&] { return !g_running.load(std::memory_order_acquire); });
       }
       if (!g_running.load(std::memory_order_acquire)) break;
-
       ipc::LogPayload p{};
-      std::snprintf(p.text, sizeof(p.text), "Hello World #%u", ++count);
+      std::snprintf(p.text, sizeof(p.text), "Hello World #%u", ++n);
       p.severity = ipc::Severity::Info;
       p.component = ipc::ComponentId::Main;
       bus.publish<ipc::MsgId::Log>(p);
     }
   });
 
-  // ── Main thread: block on g_running (futex, zero CPU) ────────────────────
+  // ── Main thread: futex wait ───────────────────────────────────────────────
   g_running.wait(true);
 
-  // Wake heartbeat and join cleanly.
   hb_cv.notify_all();
   heartbeat.join();
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
   logger.reset();
-
   std::printf("[sil_app] shutting down\n");
   return 0;
 }

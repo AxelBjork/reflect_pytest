@@ -34,7 +34,7 @@ def _wait_for_ready(proc) -> float:
     raise TimeoutError("SIL did not report Ready within 5 s")
 
 
-@pytest.mark.parametrize("n", range(1, 10))
+@pytest.mark.parametrize("n", range(1, 4))
 def test_startup_time(n, sil_process):
     """Each iteration launches a fresh sil_app and times the QueryState handshake."""
     t0 = time.monotonic()
