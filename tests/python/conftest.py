@@ -33,6 +33,13 @@ def pytest_addoption(parser):
         help="Run CMake configure, build, and CTest before the pytest suite.",
     )
     parser.addoption(
+        "--build-only",
+        action="store_true",
+        default=False,
+        help="Run C++ build and CTest, then exit without running Python "
+        "tests.",
+    )
+    parser.addoption(
         "--simulator",
         action="store_true",
         default=False,
@@ -51,7 +58,11 @@ def pytest_sessionstart(session):
     """Orchestrate C++ build and CTest, or run Simulator mode."""
     config = session.config
 
-    if config.getoption("--build"):
+    traffic_log = _BUILD_DIR / "test_traffic.jsonl"
+    if traffic_log.exists():
+        traffic_log.unlink()
+
+    if config.getoption("--build") or config.getoption("--build-only"):
         print("\n[pytest] Orchestrating C++ build and CTest...")
         try:
             # 1. CMake Configure
@@ -77,6 +88,9 @@ def pytest_sessionstart(session):
                 check=True,
             )
             print("[pytest] C++ Build & CTest successful.\n")
+            if config.getoption("--build-only"):
+                pytest.exit("C++ build/CTest successful. Exiting.",
+                            returncode=0)
         except subprocess.CalledProcessError as e:
             pytest.exit(f"C++ build or CTest failed (rc={e.returncode})",
                         returncode=1)

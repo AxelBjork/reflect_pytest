@@ -7,9 +7,25 @@
 #include <string_view>
 #include <type_traits>
 
+#include "messages.h"
 #include "traits.h"
 
 using namespace std::string_view_literals;
+
+// -------------------------------------------------------------------------------------------------
+// Annotation readers
+// -------------------------------------------------------------------------------------------------
+
+// Returns doc::Desc::text if the entity has one, otherwise "".
+template <std::meta::info R>
+consteval const char* get_desc() {
+  for (std::meta::info a : std::meta::annotations_of(R)) {
+    if (std::meta::type_of(a) == ^^doc::Desc) {
+      return std::meta::extract<doc::Desc>(a).text;
+    }
+  }
+  return "";
+}
 
 // -------------------------------------------------------------------------------------------------
 // Enum Reflection
@@ -38,6 +54,10 @@ struct EnumArrHolder {
 template <typename E>
 void generate_enum() {
   std::cout << "class " << std::meta::identifier_of(^^E) << "(IntEnum):\n";
+  const char* desc = get_desc<^^E>();
+  if (*desc) {
+    std::cout << "    \"\"\"" << desc << "\"\"\"\n";
+  }
   constexpr std::size_t N = get_enum_size<E>();
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
@@ -122,6 +142,11 @@ void generate_struct() {
   std::string class_name{std::meta::identifier_of(^^T)};
   std::cout << "@dataclass\nclass " << class_name << ":\n";
 
+  const char* class_desc = get_desc<^^T>();
+  if (*class_desc) {
+    std::cout << "    \"\"\"" << class_desc << "\"\"\"\n";
+  }
+
   constexpr std::size_t N = get_fields_size<T>();
 
   std::string pack_args;
@@ -134,7 +159,12 @@ void generate_struct() {
         constexpr auto type = std::meta::type_of(field);
         std::string field_name{std::meta::identifier_of(field)};
 
+        const char* field_desc = get_desc<field>();
+
         std::cout << "    " << field_name << ": " << get_python_type_hint<type>() << "\n";
+        if (*field_desc) {
+          std::cout << "    \"\"\"" << field_desc << "\"\"\"\n";
+        }
 
         if (!pack_args.empty()) pack_args += ", ";
         pack_args += "self." + field_name;

@@ -104,8 +104,8 @@ def wait_for_sequence(udp: UdpClient,
             time.sleep(0.01)
         except TimeoutError:
             pass
-    raise TimeoutError(
-        f"Simulator did not finish sequence cmd_id={cmd_id}")
+    raise TimeoutError(f"Simulator did not finish sequence cmd_id={cmd_id}")
+
 
 def wait_executing(udp: UdpClient, timeout: float = 1.0) -> None:
     """Block until simulator enters Executing state."""

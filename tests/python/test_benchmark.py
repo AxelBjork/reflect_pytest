@@ -36,7 +36,7 @@ def _wait_for_ready(proc) -> float:
 
 @pytest.mark.parametrize("n", range(1, 4))
 def test_startup_time(n, sil_process):
-    """Each iteration launches a fresh sil_app and times the QueryState handshake."""
+    """Each iteration launches sil_app and times the QueryState handshake."""
     t0 = time.monotonic()
     ready_after = _wait_for_ready(sil_process)
     total = time.monotonic() - t0

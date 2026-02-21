@@ -35,6 +35,23 @@ add_custom_target(python_bindings ALL
 )
 add_dependencies(sil_app python_bindings)
 
+# ── Protocol Documentation Generator (also needs -freflection) ───────────────
+add_executable(generate_docs generator/generate_docs.cpp)
+target_include_directories(generate_docs PRIVATE generator src messages)
+target_compile_options(generate_docs PRIVATE -freflection)
+
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/doc/ipc_protocol.md
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/doc
+    COMMAND generate_docs > ${CMAKE_BINARY_DIR}/doc/ipc_protocol.md
+    DEPENDS generate_docs
+    COMMENT "Generating IPC protocol Markdown documentation..."
+)
+
+add_custom_target(protocol_docs ALL
+    DEPENDS ${CMAKE_BINARY_DIR}/doc/ipc_protocol.md
+)
+
 # ── GoogleTest ────────────────────────────────────────────────────────────────
 include(FetchContent)
 FetchContent_Declare(

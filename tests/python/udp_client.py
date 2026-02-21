@@ -12,7 +12,6 @@ import struct
 from reflect_pytest.generated import (
     MESSAGE_BY_ID,
     PAYLOAD_SIZE_BY_ID,
-    LogPayload,
     MsgId,
 )
 
@@ -40,9 +39,10 @@ class UdpClient:
         payload_bytes = payload.pack_wire()
         msg_id_bytes = struct.pack("<H", int(msg_id))
         self._sock.sendto(msg_id_bytes + payload_bytes, self._bridge)
+        print(f"[UDP TX] {msg_id.name}: {payload}")
 
     def recv_msg(self, expected_id: MsgId = None):
-        """Block until a matching Message arrives (or timeout raises timeout)."""
+        """Block until matching Message arrives (or timeout raises)."""
         while True:
             data, _ = self._sock.recvfrom(4096)
             if len(data) < 2:
@@ -65,7 +65,9 @@ class UdpClient:
             try:
                 # We strip the 2-byte msgId header to unpack the payload
                 payload_class = MESSAGE_BY_ID[msg_enum]
-                return payload_class.unpack_wire(data[2:])
+                payload_obj = payload_class.unpack_wire(data[2:])
+                print(f"[UDP RX] {msg_enum.name}: {payload_obj}")
+                return payload_obj
             except struct.error:
                 continue
 
