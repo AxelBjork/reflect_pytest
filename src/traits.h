@@ -36,4 +36,10 @@ struct MessageTraits<MsgId::Log> {
   static constexpr std::string_view name = "Log";
 };
 
+template <>
+struct MessageTraits<MsgId::QueryState> {
+  using Payload = QueryStatePayload;
+  static constexpr std::string_view name = "QueryState";
+};
+
 }  // namespace ipc

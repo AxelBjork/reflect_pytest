@@ -16,7 +16,7 @@ add_library(ipc STATIC
 target_include_directories(ipc PUBLIC include)
 
 # ── SIL application ───────────────────────────────────────────────────────────
-add_executable(sil_app src/main.cpp)
+add_executable(sil_app src/main.cpp src/logger.cpp)
 target_link_libraries(sil_app PRIVATE ipc)
 
 # ── Python Generator ──────────────────────────────────────────────────────────
@@ -24,14 +24,14 @@ add_executable(generate_bindings src/generate_bindings.cpp)
 target_link_libraries(generate_bindings PRIVATE ipc)
 
 add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/python/reflect_pytest/generated.py
-    COMMAND generate_bindings > ${CMAKE_SOURCE_DIR}/python/reflect_pytest/generated.py
+    OUTPUT ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py
+    COMMAND generate_bindings > ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py
     DEPENDS generate_bindings
     COMMENT "Generating Python bindings using C++ reflection..."
 )
 
 add_custom_target(python_bindings ALL
-    DEPENDS ${CMAKE_SOURCE_DIR}/python/reflect_pytest/generated.py
+    DEPENDS ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py
 )
 add_dependencies(sil_app python_bindings)
 

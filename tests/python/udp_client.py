@@ -9,7 +9,12 @@ from __future__ import annotations
 import socket
 import struct
 
-from reflect_pytest.generated import LogPayload, MsgId
+from reflect_pytest.generated import (
+    MESSAGE_BY_ID,
+    PAYLOAD_SIZE_BY_ID,
+    LogPayload,
+    MsgId,
+)
 
 
 class UdpClient:
@@ -31,23 +36,36 @@ class UdpClient:
         """Send an empty packet so the bridge records our address."""
         self._sock.sendto(b"", self._bridge)
 
-    def send_log(self, log: LogPayload) -> None:
-        payload_bytes = log.pack_wire()
-        msg_id_bytes = struct.pack("<H", int(MsgId.Log))
+    def send_msg(self, msg_id: MsgId, payload) -> None:
+        payload_bytes = payload.pack_wire()
+        msg_id_bytes = struct.pack("<H", int(msg_id))
         self._sock.sendto(msg_id_bytes + payload_bytes, self._bridge)
 
-    def recv_log(self) -> LogPayload:
-        """Block until a LogMessage arrives (or timeout raises timeout)."""
+    def recv_msg(self, expected_id: MsgId = None):
+        """Block until a matching Message arrives (or timeout raises timeout)."""
         while True:
             data, _ = self._sock.recvfrom(4096)
             if len(data) < 2:
                 continue
+
             msg_id = struct.unpack_from("<H", data)[0]
-            if msg_id != int(MsgId.Log):
+            try:
+                msg_enum = MsgId(msg_id)
+            except ValueError:
+                continue  # Unknown message
+
+            if expected_id is not None and msg_enum != expected_id:
                 continue
+
+            # Ensure we have the correct amount of data for the payload
+            expected_size = PAYLOAD_SIZE_BY_ID.get(msg_enum)
+            if expected_size is None or len(data) - 2 != expected_size:
+                continue
+
             try:
                 # We strip the 2-byte msgId header to unpack the payload
-                return LogPayload.unpack_wire(data[2:])
+                payload_class = MESSAGE_BY_ID[msg_enum]
+                return payload_class.unpack_wire(data[2:])
             except struct.error:
                 continue
 

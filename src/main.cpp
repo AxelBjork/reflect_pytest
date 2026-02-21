@@ -7,54 +7,19 @@
 //   bridge-rx     — inside UdpBridge: UDP recv → bus inject
 
 #include <atomic>
-#include <condition_variable>
 #include <csignal>
 #include <cstdio>
 #include <cstring>
-#include <mutex>
-#include <queue>
 #include <thread>
 
 #include "ipc/message_bus.hpp"
 #include "ipc/udp_bridge.hpp"
+#include "logger.hpp"
 
 static std::atomic<bool> g_running{true};
 
 static constexpr char kSockPath[] = "/tmp/sil_bus.sock";
 static constexpr uint16_t kUdpPort = 9000;
-
-// ── Severity / Component to string helpers
-// ────────────────────────────────────
-
-static constexpr const char* sev_str(ipc::Severity s) {
-  switch (s) {
-    case ipc::Severity::Debug:
-      return "DEBUG";
-    case ipc::Severity::Info:
-      return "INFO";
-    case ipc::Severity::Warn:
-      return "WARN";
-    case ipc::Severity::Error:
-      return "ERROR";
-  }
-  return "?";
-}
-
-static constexpr const char* comp_str(ipc::ComponentId c) {
-  switch (c) {
-    case ipc::ComponentId::Main:
-      return "main";
-    case ipc::ComponentId::Bus:
-      return "bus";
-    case ipc::ComponentId::Logger:
-      return "logger";
-    case ipc::ComponentId::Bridge:
-      return "bridge";
-    case ipc::ComponentId::Test:
-      return "test";
-  }
-  return "?";
-}
 
 int main() {
   std::signal(SIGTERM, [](int) { g_running = false; });
@@ -63,37 +28,17 @@ int main() {
   ipc::MessageBus bus(kSockPath);
 
   // ── Logger thread ─────────────────────────────────────────────────────────
-  std::queue<ipc::LogPayload> log_queue;
-  std::mutex log_mu;
-  std::condition_variable log_cv;
-  std::atomic<bool> log_running{true};
+  auto logger = sil::create_logger(bus);
 
-  bus.subscribe(ipc::MsgId::Log, [&](ipc::RawMessage msg) {
-    if (msg.payload.size() != sizeof(ipc::LogPayload)) return;
-    ipc::LogPayload p{};
-    std::memcpy(&p, msg.payload.data(), sizeof(p));
-    {
-      std::lock_guard lk(log_mu);
-      log_queue.push(p);
-    }
-    log_cv.notify_one();
-  });
+  // ── QueryState Handler ────────────────────────────────────────────────────
+  bus.subscribe(ipc::MsgId::QueryState, [&bus](ipc::RawMessage msg) {
+    if (msg.payload.size() != sizeof(ipc::QueryStatePayload)) return;
 
-  std::thread logger([&] {
-    while (log_running) {
-      std::unique_lock lk(log_mu);
-      log_cv.wait(lk, [&] { return !log_queue.empty() || !log_running; });
-      while (!log_queue.empty()) {
-        auto p = log_queue.front();
-        log_queue.pop();
-        lk.unlock();
-        char text[256]{};
-        std::strncpy(text, p.text, 255);
-        std::printf("[%s][%s] %s\n", sev_str(p.severity), comp_str(p.component), text);
-        std::fflush(stdout);
-        lk.lock();
-      }
-    }
+    // As soon as this message is received by the client we just echo it back mapped to
+    // the system state! The SIL is alive and well.
+    ipc::QueryStatePayload response{};
+    response.state = ipc::SystemState::Ready;
+    bus.publish<ipc::MsgId::QueryState>(response);
   });
 
   // ── UDP bridge ────────────────────────────────────────────────────────────
@@ -115,9 +60,7 @@ int main() {
   }
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
-  log_running = false;
-  log_cv.notify_all();
-  logger.join();
+  logger.reset();  // Destroy background loop first
 
   std::printf("[sil_app] shutting down\n");
   return 0;

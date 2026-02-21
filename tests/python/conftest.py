@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -18,6 +19,10 @@ import pytest
 _REPO_ROOT = Path(__file__).parents[2]
 _BUILD_DIR = _REPO_ROOT / "build"
 _DEFAULT_BIN = _BUILD_DIR / "sil_app"
+
+# Add the build-time generated python bindings to the sys.path
+_PYTHON_BUILD_DIR = _BUILD_DIR / "python"
+sys.path.insert(0, str(_PYTHON_BUILD_DIR))
 
 
 def pytest_addoption(parser):
