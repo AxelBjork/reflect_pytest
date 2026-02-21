@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <iostream>
 #include <meta>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -84,9 +85,8 @@ consteval const char* get_desc() {
 // Returns a runtime std::string so arrays can be formatted as "ElemType[N]".
 // -------------------------------------------------------------------------------------------------
 
-template <std::meta::info Type>
+template <typename T>
 std::string cpp_type_name_str() {
-  using T = typename[:Type:];
   if constexpr (std::is_same_v<T, bool>)
     return "bool";
   else if constexpr (std::is_same_v<T, char>)
@@ -111,13 +111,12 @@ std::string cpp_type_name_str() {
     return "float";
   else if constexpr (std::is_same_v<T, double>)
     return "double";
-  else if constexpr (std::is_enum_v<T>)
-    return std::string(std::meta::identifier_of(Type));
+  else if constexpr (std::is_enum_v<T> || std::is_class_v<T>)
+    return std::string(std::meta::identifier_of(^^T));
   else if constexpr (std::is_array_v<T>) {
     using Elem = std::remove_extent_t<T>;
     constexpr std::size_t n = std::extent_v<T>;
-    constexpr auto elem_info = ^^Elem;
-    return cpp_type_name_str<elem_info>() + "[" + std::to_string(n) + "]";
+    return cpp_type_name_str<Elem>() + "[" + std::to_string(n) + "]";
   } else
     return "?";
 }
@@ -147,7 +146,10 @@ consteval std::string_view py_type_hint() {
 // -------------------------------------------------------------------------------------------------
 
 template <typename T>
-void emit_field_table() {
+void emit_md_struct_section(std::set<std::string>& visited);
+
+template <typename T>
+void emit_field_table(std::set<std::string>& visited) {
   constexpr std::size_t N = doc_get_fields_size<T>();
   if constexpr (N == 0) {
     std::cout << "_No fields._\n\n";
@@ -157,7 +159,7 @@ void emit_field_table() {
   std::cout << "<table>\n";
   std::cout << "  <thead>\n";
   std::cout << "    <tr><th>Field</th><th>C++ Type</th><th>Py "
-               "Type</th><th>Bytes</th><th>Offset</th><th>Description</th></tr>\n";
+               "Type</th><th>Bytes</th><th>Offset</th></tr>\n";
   std::cout << "  </thead>\n";
   std::cout << "  <tbody>\n";
 
@@ -165,30 +167,39 @@ void emit_field_table() {
     (..., [&] {
       constexpr auto field = DocStructArrHolder<T, N>::arr[Is];
       constexpr auto type = std::meta::type_of(field);
-      // We evaluate get_desc as constexpr to ensure it works at compile time
-      const char* fdesc = get_desc<field>();
 
       const std::string fname{std::meta::identifier_of(field)};
-      const std::string ctype = cpp_type_name_str<type>();
+      using FT = typename[:type:];
+      const std::string ctype = cpp_type_name_str<FT>();
       constexpr std::string_view ptype = py_type_hint<type>();
 
-      using FT = typename[:type:];
       constexpr std::size_t fsize = sizeof(FT);
       constexpr std::size_t foffset = std::meta::offset_of(field).bytes;
 
       std::cout << "    <tr>\n"
-                << "      <td><code>" << fname << "</code></td>\n"
-                << "      <td><code>" << ctype << "</code></td>\n"
-                << "      <td><code>" << ptype << "</code></td>\n"
+                << "      <td>" << fname << "</td>\n"
+                << "      <td>" << ctype << "</td>\n"
+                << "      <td>" << ptype << "</td>\n"
                 << "      <td>" << fsize << "</td>\n"
                 << "      <td>" << foffset << "</td>\n"
-                << "      <td>" << fdesc << "</td>\n"
                 << "    </tr>\n";
     }());
   }(std::make_index_sequence<N>{});
 
   std::cout << "  </tbody>\n";
   std::cout << "</table>\n\n";
+
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (..., [&] {
+      constexpr auto field = DocStructArrHolder<T, N>::arr[Is];
+      constexpr auto type = std::meta::type_of(field);
+      using FT = typename[:type:];
+      using BaseT = std::remove_all_extents_t<FT>;
+      if constexpr (std::is_class_v<BaseT>) {
+        emit_md_struct_section<BaseT>(visited);
+      }
+    }());
+  }(std::make_index_sequence<N>{});
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -243,16 +254,20 @@ void emit_md_enum_section() {
 // -------------------------------------------------------------------------------------------------
 
 template <typename T>
-void emit_md_struct_section() {
+void emit_md_struct_section(std::set<std::string>& visited) {
   constexpr auto R = ^^T;
   const std::string name{std::meta::identifier_of(R)};
+  if (!visited.insert(name).second) {
+    return;
+  }
+
   const char* desc = get_desc<R>();
 
-  std::cout << "### `" << name << "`\n\n";
+  std::cout << "#### Sub-struct: `" << name << "`\n\n";
   if (*desc) std::cout << "> " << desc << "\n\n";
   std::cout << "**Wire size:** " << sizeof(T) << " bytes\n\n";
 
-  emit_field_table<T>();
+  emit_field_table<T>(visited);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -270,21 +285,27 @@ struct doc_payload_or_void<
   using type = typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload;
 };
 
+template <typename Payload, uint32_t Id>
+void emit_md_payload_section() {
+  constexpr auto R = ^^Payload;
+  constexpr auto mid = static_cast<ipc::MsgId>(Id);
+  constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
+  const char* desc = get_desc<R>();
+  const std::string sname{std::meta::identifier_of(R)};
+  std::cout << "### `MsgId::" << mname << "` (`" << sname << "`)\n\n";
+  if (*desc) std::cout << "> " << desc << "\n\n";
+  std::cout << "**Wire size:** " << sizeof(Payload) << " bytes\n\n";
+
+  std::set<std::string> visited;
+  emit_field_table<Payload>(visited);
+}
+
 // Emit a full payload section (heading + description + field table) for one MsgId.
 template <uint32_t Id>
 void emit_md_payload_section_for_msg_id() {
   using T = typename doc_payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
-    constexpr auto R = ^^T;
-    constexpr auto mid = static_cast<ipc::MsgId>(Id);
-    constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
-    const char* desc = get_desc<R>();
-    const std::string sname{std::meta::identifier_of(R)};
-    std::cout << "### `" << sname << "` <sub>MsgId::" << mname << "</sub>\n\n";
-    if (*desc) std::cout << "> " << desc << "\n\n";
-    std::cout << "**Wire size:** " << sizeof(T) << " bytes\n\n";
-
-    emit_field_table<T>();
+    emit_md_payload_section<T, Id>();
   }
 }
 

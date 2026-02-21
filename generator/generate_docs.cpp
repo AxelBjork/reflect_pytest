@@ -62,12 +62,6 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
   emit_md_enum_section<ipc::ComponentId>();
   emit_md_enum_section<ipc::SystemState>();
 
-  // ── Helper Structs ──────────────────────────────────────────────────────────
-  std::cout << "---\n\n## Helper Structs\n\n";
-  std::cout << "_These structs are embedded inside message payloads and are not "
-               "sent as top-level messages._\n\n";
-  emit_md_struct_section<ipc::MotorSubCmd>();
-
   // ── Message Payloads ────────────────────────────────────────────────────────
   std::cout << "---\n\n## Message Payloads\n\n";
   std::cout << "Each section corresponds to one `MsgId` enumerator. "

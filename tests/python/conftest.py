@@ -104,20 +104,48 @@ def pytest_sessionstart(session):
         try:
             # Run without capturing so output goes straight to terminal
             proc = subprocess.Popen([str(binary)])
+
+            # Briefly wait for SIL to bind UDP
+            time.sleep(0.5)
+
+            try:
+                from reflect_pytest.generated import (
+                    MsgId,
+                    MotorSequencePayload,
+                )
+                from udp_client import UdpClient
+
+                with UdpClient() as udp:
+                    udp.register()
+                    import struct
+                    # Demo seq: +1500 RPM (1s), Stop (1s), -1500 RPM (1s)
+                    steps = [(500, 2_000_000), (1000, 2_000_000),
+                             (1500, 2_000_000), (-500, 2_000_000),
+                             (-1000, 2_000_000), (-1500, 2_000_000)]
+                    packed = b"".join(
+                        struct.pack("<hI", r, d) for r, d in steps)
+                    packed = packed.ljust(60, b"\x00")
+                    seq = MotorSequencePayload(cmd_id=1,
+                                               num_steps=6,
+                                               steps=packed)
+                    udp.send_msg(MsgId.MotorSequence, seq)
+                    print("\n[pytest] Injected demo sequence "
+                          "(cmd=1, 6 steps)\n")
+            except Exception as e:
+                print(f"[pytest] Could not send demo sequence: {e}")
+
             startTime = time.monotonic()
 
             while time.monotonic() - startTime < duration:
                 if proc.poll() is not None:
-                    print(
-                        f"\n[pytest] sil_app exited early (rc={proc.returncode})"
-                    )
+                    print(f"\n[pytest] sil_app exited early "
+                          f"(rc={proc.returncode})")
                     break
                 time.sleep(0.1)
 
             if proc.poll() is None:
-                print(
-                    f"\n[pytest] Simulator duration ({duration}s) reached. Shutting down..."
-                )
+                print(f"\n[pytest] Simulator duration ({duration}s) reached. "
+                      "Shutting down...")
                 proc.terminate()
                 try:
                     proc.wait(timeout=5)

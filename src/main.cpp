@@ -58,7 +58,7 @@ int main() {
       }
       if (!g_running.load(std::memory_order_acquire)) break;
       ipc::LogPayload p{};
-      std::snprintf(p.text, sizeof(p.text), "Hello World #%u", ++n);
+      std::snprintf(p.text, sizeof(p.text), "[heartbeat] TICK %u", ++n);
       p.severity = ipc::Severity::Info;
       p.component = ipc::ComponentId::Main;
       bus.publish<ipc::MsgId::Log>(p);
