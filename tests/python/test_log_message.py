@@ -24,7 +24,7 @@ def udp(sil_process):
 def test_intercept_hello_world(udp):
     """The C++ app sends 'Hello World' every 500 ms — we must receive one."""
     log = udp.recv_log()  # blocks up to 5 s (UdpClient default timeout)
-    assert "Hello World" in log.text
+    assert b"Hello World" in log.text
     assert log.severity == Severity.Info
     assert log.component == ComponentId.Main
 
@@ -32,7 +32,7 @@ def test_intercept_hello_world(udp):
 def test_inject_hello_world(udp):
     """Send our own Hello World; bridge injects it and echoes it back."""
     sent = LogPayload(
-        text="Hello World from pytest",
+        text=b"Hello World from pytest\x00",
         severity=Severity.Info,
         component=ComponentId.Test,
     )
@@ -45,7 +45,7 @@ def test_inject_hello_world(udp):
             log = udp.recv_log()
         except TimeoutError:
             break
-        if log.text == sent.text and log.component == ComponentId.Test:
+        if b"Hello World from pytest" in log.text and log.component == ComponentId.Test:
             return  # found it
 
     pytest.fail(

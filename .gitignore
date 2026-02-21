@@ -8,7 +8,7 @@ compile_commands.json
 
 # ── FetchContent / ExternalProject caches ─────────────────────────────────────
 _deps/
-
+gcc/*
 # ── Compiled object & library files ──────────────────────────────────────────
 *.o
 *.obj
