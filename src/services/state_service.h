@@ -5,7 +5,7 @@
 
 namespace sil {
 
-class StateService {
+class DOC_DESC("Maintains the central lifecycle state machine of the simulation.") StateService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::StateChange, ipc::MsgId::QueryState>;
   using Publishes = ipc::MsgList<ipc::MsgId::QueryState>;

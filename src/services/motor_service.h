@@ -8,7 +8,7 @@
 
 namespace sil {
 
-class MotorService {
+class DOC_DESC("Manages the thread that executes timed motor commands in real-time.") MotorService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::MotorSequence>;
   using Publishes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::StateChange>;

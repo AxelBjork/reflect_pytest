@@ -17,6 +17,53 @@ struct MainPublisher {
 using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>(),
                                               std::declval<std::tuple<MainPublisher>>()));
 
+void emit_toc() {
+  constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (..., [] {
+      constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr uint32_t val = static_cast<uint32_t>([:e:]);
+      using T = typename doc_payload_or_void<val>::type;
+      if constexpr (!std::is_void_v<T>) {
+        constexpr auto mid = static_cast<ipc::MsgId>(val);
+        constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
+        const std::string sname = cpp_type_name_str<T>();
+        std::string link = "msgid" + std::string(mname) + "-" + sname;
+        for (auto& c : link) c = std::tolower(c);
+        std::cout << "- [`" << mname << "`](#" << link << ")\n";
+      }
+    }());
+  }(std::make_index_sequence<num_msgs>{});
+}
+
+template <typename Components>
+void emit_payloads() {
+  constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (..., [] {
+      constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr uint32_t val = static_cast<uint32_t>([:e:]);
+      emit_md_payload_section_for_msg_id<Components, val>();
+    }());
+  }(std::make_index_sequence<num_msgs>{});
+}
+
+template <typename Components>
+void emit_components() {
+  constexpr std::size_t num_components = std::tuple_size_v<Components>;
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (..., [] {
+      using C = std::tuple_element_t<Is, Components>;
+      constexpr auto R = ^^C;
+      const std::string name{std::meta::identifier_of(R)};
+      const char* desc = get_desc<R>();
+      if (*desc) {
+        std::cout << "### `" << name << "`\n\n> " << desc << "\n\n";
+      }
+    }());
+  }(std::make_index_sequence<num_components>{});
+}
+
 int main() {
   // ── Front-matter & module overview ─────────────────────────────────────────
 
@@ -65,26 +112,20 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
   emit_mermaid_flow<AllComponents>();
 
-  // ── Enums ───────────────────────────────────────────────────────────────────
-  std::cout << "---\n\n## Enums\n\n";
-  emit_md_enum_section<ipc::MsgId>();
-  emit_md_enum_section<ipc::Severity>();
-  emit_md_enum_section<ipc::ComponentId>();
-  emit_md_enum_section<ipc::SystemState>();
+  // ── Services & Components ───────────────────────────────────────────────────
+  std::cout << "---\n\n## Component Services\n\n";
+  std::cout << "The application is composed of the following services:\n\n";
+  emit_components<AllComponents>();
 
-  // ── Message Payloads ────────────────────────────────────────────────────────
+  // ── Message Payloads & TOC ──────────────────────────────────────────────────
   std::cout << "---\n\n## Message Payloads\n\n";
-  std::cout << "Each section corresponds to one `MsgId` enumerator. "
+
+  emit_toc();
+
+  std::cout << "\nEach section corresponds to one `MsgId` enumerator. "
                "The **direction badge** shows which side initiates the message.\n\n";
 
-  constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
-  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-    (..., [] {
-      constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
-      constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      emit_md_payload_section_for_msg_id<AllComponents, val>();
-    }());
-  }(std::make_index_sequence<num_msgs>{});
+  emit_payloads<AllComponents>();
 
   // ── Footer ─────────────────────────────────────────────────────────────────
   std::cout <<

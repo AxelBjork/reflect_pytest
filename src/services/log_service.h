@@ -8,7 +8,8 @@
 
 namespace sil {
 
-class LogService {
+class DOC_DESC("Periodically aggregates system state into human-readable text logs for debugging.")
+    LogService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::StateChange>;
   using Publishes = ipc::MsgList<ipc::MsgId::Log>;

@@ -21,6 +21,12 @@
 using namespace std::string_view_literals;
 
 // -------------------------------------------------------------------------------------------------
+// Forward declarations
+// -------------------------------------------------------------------------------------------------
+template <typename T>
+std::string cpp_type_name_str();
+
+// -------------------------------------------------------------------------------------------------
 // Component Sub/Pub Helpers
 // -------------------------------------------------------------------------------------------------
 
@@ -65,6 +71,44 @@ consteval bool any_publishes_impl(std::index_sequence<Is...>) {
 template <typename Tuple, ipc::MsgId Id>
 consteval bool any_cxx_publishes() {
   return any_publishes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+void print_subscribers_impl(std::index_sequence<Is...>) {
+  bool first = true;
+  (..., [&]() {
+    using Comp = std::tuple_element_t<Is, Tuple>;
+    if constexpr (component_subscribes<Comp, Id>()) {
+      if (!first) std::cout << ", ";
+      std::cout << "`" << cpp_type_name_str<Comp>() << "`";
+      first = false;
+    }
+  }());
+  if (first) std::cout << "_None_";
+}
+
+template <typename Tuple, ipc::MsgId Id>
+void print_subscribers() {
+  print_subscribers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+void print_publishers_impl(std::index_sequence<Is...>) {
+  bool first = true;
+  (..., [&]() {
+    using Comp = std::tuple_element_t<Is, Tuple>;
+    if constexpr (component_publishes<Comp, Id>()) {
+      if (!first) std::cout << ", ";
+      std::cout << "`" << cpp_type_name_str<Comp>() << "`";
+      first = false;
+    }
+  }());
+  if (first) std::cout << "_None_";
+}
+
+template <typename Tuple, ipc::MsgId Id>
+void print_publishers() {
+  print_publishers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -355,6 +399,12 @@ void emit_md_payload_section() {
     direction = "Bidirectional";
 
   std::cout << "**Direction:** `" << direction << "`<br>\n";
+  std::cout << "**Publishes:** ";
+  print_publishers<Components, mid>();
+  std::cout << "<br>\n";
+  std::cout << "**Subscribes:** ";
+  print_subscribers<Components, mid>();
+  std::cout << "<br>\n";
   std::cout << "**Wire size:** " << sizeof(Payload) << " bytes\n\n";
 
   std::set<std::string> visited;

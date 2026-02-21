@@ -15,7 +15,9 @@
 
 namespace ipc {
 
-class UdpBridge {
+class DOC_DESC(
+    "Stateful bridge that relays IPC messages between the internal MessageBus and external "
+    "UDP clients for bidirectional testing.") UdpBridge {
  public:
   using Subscribes =
       MsgList<MsgId::Log, MsgId::QueryState, MsgId::KinematicsData, MsgId::PowerData>;

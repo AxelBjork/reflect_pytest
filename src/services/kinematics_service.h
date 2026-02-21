@@ -7,7 +7,9 @@ namespace sil {
 
 inline constexpr float K_RPM_TO_MPS = 0.01f;
 
-class KinematicsService {
+class DOC_DESC(
+    "Simulates vehicle motion by integrating motor RPM over time to track position and "
+    "linear velocity.") KinematicsService {
  public:
   using Subscribes =
       ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::KinematicsRequest, ipc::MsgId::StateChange>;

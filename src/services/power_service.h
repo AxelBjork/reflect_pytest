@@ -12,7 +12,9 @@ inline constexpr float R_INT_OHM = 0.5f;
 inline constexpr float V_MAX = 12.6f;
 inline constexpr float V_MIN = 10.5f;
 
-class PowerService {
+class DOC_DESC(
+    "Models a simple battery pack. Voltage drops dynamically under motor load based on "
+    "internal resistance, tracking state of charge over time.") PowerService {
  public:
   using Subscribes =
       ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::PowerRequest, ipc::MsgId::StateChange>;
