@@ -1,11 +1,11 @@
-FROM ubuntu:22.04
+FROM ubuntu:rolling
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ── Base utilities ────────────────────────────────────────────────────────────
-# build-essential is installed here (before the gcc-14 PPA layer) so that apt
-# does not later override the update-alternatives priority we set for gcc-14.
+# build-essential is installed here so that apt does not later override the 
+# update-alternatives priority we set for GCC 15.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
@@ -17,23 +17,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Ubuntu Toolchain PPA → gcc-snapshot (GCC trunk nightly) ──────────────────
-# gcc-snapshot is required for C++26 static reflection (P2996), which is only
-# present on GCC trunk and not in any released GCC version.
-# Snapshot binaries live at /usr/lib/gcc-snapshot/bin/.
-RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    gcc-snapshot \
-    # Register snapshot at priority 200 so it wins over build-essential's gcc-11
-    && update-alternatives --install /usr/bin/gcc gcc /usr/lib/gcc-snapshot/bin/gcc 200 \
-    && update-alternatives --install /usr/bin/g++ g++ /usr/lib/gcc-snapshot/bin/g++ 200 \
-    && update-alternatives --install /usr/bin/cc  cc  /usr/lib/gcc-snapshot/bin/gcc 200 \
-    && update-alternatives --install /usr/bin/c++ c++ /usr/lib/gcc-snapshot/bin/g++ 200 \
+# ── GCC Trunk Nightly ────────────────────────────────────────────────────────
+# Using ubuntu:rolling gives us access to gcc-15 natively which serves as the 
+# GCC trunk nightly required for C++26 static reflection (P2996).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc-15 \
+    g++-15 \
+    # Register snapshot at priority 200 so it wins over build-essential's gcc
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 200 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-15 200 \
+    && update-alternatives --install /usr/bin/cc  cc  /usr/bin/gcc-15 200 \
+    && update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-15 200 \
     && rm -rf /var/lib/apt/lists/*
-
-# Make the snapshot's libstdc++ and libgcc visible to the dynamic linker
-ENV PATH="/usr/lib/gcc-snapshot/bin:${PATH}" \
-    LD_LIBRARY_PATH="/usr/lib/gcc-snapshot/lib64:/usr/lib/gcc-snapshot/lib:${LD_LIBRARY_PATH}"
 
 # ── Core C++ tooling ──────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -62,7 +57,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-wheel \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --no-cache-dir --break-system-packages \
     pytest \
     pytest-cov \
     pytest-xdist \
@@ -73,7 +68,8 @@ ARG USERNAME=vscode
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
-RUN groupadd --gid $USER_GID $USERNAME \
+RUN userdel -r ubuntu \
+    && groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME

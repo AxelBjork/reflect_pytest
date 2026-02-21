@@ -4,27 +4,43 @@ A software-in-the-loop (SIL) test framework that uses **C++26 static reflection*
 
 ## Architecture
 
+> [!TIP]
+> To preview the Mermaid diagrams below directly in VS Code, install the **Markdown Preview Mermaid Support** extension (`bierner.markdown-mermaid`). It has been added to `.devcontainer.json` recommendations.
+
+The current POC implements a single-node Publisher/Subscriber bus backed by an AF_UNIX socket, bridged to a UDP port so `pytest` can interact with it.
+
 ```mermaid
-flowchart LR
-    subgraph cpp["C++ Process"]
+flowchart TD
+    subgraph cpp["C++ Target Application"]
         direction TB
-        A["Module A"]
-        B["Module B"]
-        BUS["AF_UNIX SOCK_DGRAM\nuint16_t msgId + payload"]
-        BRIDGE["UDP Bridge"]
-        A <--> BUS
-        B <--> BUS
-        BUS <--> BRIDGE
+        
+        subgraph modules["Feature Modules"]
+            PUB["Publisher\n(E.g., Motor Controller)"]
+            SUB["Subscriber\n(E.g., Safety Monitor)"]
+        end
+
+        subgraph ipc["IPC Layer"]
+            BUS[["MessageBus\n(AF_UNIX pub/sub)"]]
+            BRIDGE["UdpBridge\n(subscribes to all & forwards to UDP;\ninjects UDP telemetry into bus)"]
+        end
+
+        PUB -- "publish<MotorCmd> (AF_UNIX)" --> BUS
+        BUS -- "dispatch (in memory)" --> SUB
+        BUS -- "relay over socket" --> BRIDGE
     end
 
-    subgraph py["Python / pytest"]
+    subgraph py["Python SIL Suite (pytest)"]
         direction TB
-        EXT["_reflect\npybind11 extension\nauto-generated via C++26 reflection"]
-        TEST["pytest SIL suite"]
-        TEST --> EXT
+        TEST["Test Cases\n(Behavior assertions)"]
+        CLIENT["UdpClient\n(via auto-generated _reflect pybind11)"]
+        
+        TEST -- "send/recv structured payload" <--> CLIENT
     end
 
-    BRIDGE <-->|"UDP :9000\nsame wire format"| EXT
+    BRIDGE <-->|"UDP :9000\n(host byte-order wire format)"| CLIENT
+
+    classDef proc fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    class cpp,py proc;
 ```
 
 **Wire format** (identical on AF_UNIX and UDP):
@@ -45,17 +61,24 @@ Payloads are **fixed-size and trivially copyable**. Any packet whose length ≠ 
 
 ## Build & Test
 
+`pytest` is the single entry point for orchestrating the build, unit tests, and integration tests.
+
 ```bash
-# 1. Configure + build
-cmake -B build -G Ninja
-cmake --build build
+# 1. Build C++ app, run ctest (GTest), then run pytest SIL suite
+pytest tests/python/ --build -v
 
-# 2. C++ unit tests
-ctest --test-dir build --output-on-failure
+# 2. Run the SIL suite only (app must be built)
+pytest tests/python/ -v
 
-# 3. SIL integration suite
-pytest tests/python/
+# 3. Simulator Mode: Run the C++ app for 10 seconds (no Python tests)
+pytest tests/python/ --simulator --sim-duration 10
 ```
+
+## Compiler Setup (C++26 Reflection)
+
+This project relies on **C++26 static reflection** (P2996), which is currently only available on GCC trunk via the `-freflection` flag. 
+
+In this devcontainer, the compiler is provided by the `gcc-snapshot` package from the `ppa:ubuntu-toolchain-r/test` Ubuntu PPA. It installs to `/usr/lib/gcc-snapshot/bin/g++`. Note that despite being trunk, the snapshot sometimes self-reports its version as `12.0.0` depending on the build date, so not all C++23 features (like `<print>`) are necessarily present in the snapshot payload.
 
 ## Stack
 

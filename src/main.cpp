@@ -6,9 +6,6 @@
 //   logger        — dedicated: prints every LogMessage
 //   bridge-rx     — inside UdpBridge: UDP recv → bus inject
 
-#include "ipc/message_bus.hpp"
-#include "ipc/udp_bridge.hpp"
-
 #include <atomic>
 #include <condition_variable>
 #include <csignal>
@@ -18,6 +15,9 @@
 #include <queue>
 #include <thread>
 
+#include "ipc/message_bus.hpp"
+#include "ipc/udp_bridge.hpp"
+
 static std::atomic<bool> g_running{true};
 
 static constexpr char kSockPath[] = "/tmp/sil_bus.sock";
@@ -26,32 +26,32 @@ static constexpr uint16_t kUdpPort = 9000;
 // ── Severity / Component to string helpers
 // ────────────────────────────────────
 
-static constexpr const char *sev_str(ipc::Severity s) {
+static constexpr const char* sev_str(ipc::Severity s) {
   switch (s) {
-  case ipc::Severity::Debug:
-    return "DEBUG";
-  case ipc::Severity::Info:
-    return "INFO";
-  case ipc::Severity::Warn:
-    return "WARN";
-  case ipc::Severity::Error:
-    return "ERROR";
+    case ipc::Severity::Debug:
+      return "DEBUG";
+    case ipc::Severity::Info:
+      return "INFO";
+    case ipc::Severity::Warn:
+      return "WARN";
+    case ipc::Severity::Error:
+      return "ERROR";
   }
   return "?";
 }
 
-static constexpr const char *comp_str(ipc::ComponentId c) {
+static constexpr const char* comp_str(ipc::ComponentId c) {
   switch (c) {
-  case ipc::ComponentId::Main:
-    return "main";
-  case ipc::ComponentId::Bus:
-    return "bus";
-  case ipc::ComponentId::Logger:
-    return "logger";
-  case ipc::ComponentId::Bridge:
-    return "bridge";
-  case ipc::ComponentId::Test:
-    return "test";
+    case ipc::ComponentId::Main:
+      return "main";
+    case ipc::ComponentId::Bus:
+      return "bus";
+    case ipc::ComponentId::Logger:
+      return "logger";
+    case ipc::ComponentId::Bridge:
+      return "bridge";
+    case ipc::ComponentId::Test:
+      return "test";
   }
   return "?";
 }
@@ -69,8 +69,7 @@ int main() {
   std::atomic<bool> log_running{true};
 
   bus.subscribe(ipc::MsgId::Log, [&](ipc::RawMessage msg) {
-    if (msg.payload.size() != sizeof(ipc::LogPayload))
-      return;
+    if (msg.payload.size() != sizeof(ipc::LogPayload)) return;
     ipc::LogPayload p{};
     std::memcpy(&p, msg.payload.data(), sizeof(p));
     {
@@ -90,8 +89,7 @@ int main() {
         lk.unlock();
         char text[256]{};
         std::strncpy(text, p.text, 255);
-        std::printf("[%s][%s] %s\n", sev_str(p.severity), comp_str(p.component),
-                    text);
+        std::printf("[%s][%s] %s\n", sev_str(p.severity), comp_str(p.component), text);
         std::fflush(stdout);
         lk.lock();
       }
@@ -101,15 +99,13 @@ int main() {
   // ── UDP bridge ────────────────────────────────────────────────────────────
   ipc::UdpBridge bridge(bus, kUdpPort);
 
-  std::printf("[sil_app] started (UDP bridge on :%u, bus on %s)\n", kUdpPort,
-              kSockPath);
+  std::printf("[sil_app] started (UDP bridge on :%u, bus on %s)\n", kUdpPort, kSockPath);
   std::fflush(stdout);
 
   // ── Hello World loop ──────────────────────────────────────────────────────
   while (g_running) {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    if (!g_running)
-      break;
+    if (!g_running) break;
 
     ipc::LogPayload p{};
     std::strncpy(p.text, "Hello World", sizeof(p.text) - 1);

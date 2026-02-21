@@ -16,30 +16,31 @@ import struct
 from dataclasses import dataclass
 from enum import IntEnum
 
-# ── Enums (must match ipc/messages.hpp) ───────────────────────────────────────
+# ── Enums (must match ipc/messages.hpp) ──────────────────────────────
+
 
 class MsgId(IntEnum):
-    MotorCmd   = 0x0001
+    MotorCmd = 0x0001
     SensorData = 0x0002
-    Log        = 0x0003
+    Log = 0x0003
 
 
 class Severity(IntEnum):
     Debug = 0
-    Info  = 1
-    Warn  = 2
+    Info = 1
+    Warn = 2
     Error = 3
 
 
 class ComponentId(IntEnum):
-    Main   = 0
-    Bus    = 1
+    Main = 0
+    Bus = 1
     Logger = 2
     Bridge = 3
-    Test   = 4
+    Test = 4
 
 
-# ── LogPayload ─────────────────────────────────────────────────────────────────
+# ── LogPayload ───────────────────────────────────────────────────────────
 
 # struct format: little-endian, 255-byte text + 2 × uint8
 _LOG_STRUCT = struct.Struct("<255sBB")
@@ -52,8 +53,8 @@ assert _WIRE_LOG_STRUCT.size == 259
 
 @dataclass
 class LogPayload:
-    text:      str
-    severity:  Severity   = Severity.Info
+    text: str
+    severity: Severity = Severity.Info
     component: ComponentId = ComponentId.Test
 
     def pack_wire(self) -> bytes:
@@ -70,7 +71,8 @@ class LogPayload:
     def unpack_wire(data: bytes) -> "LogPayload":
         """Deserialise from raw wire bytes (msgId + payload)."""
         if len(data) != _WIRE_LOG_STRUCT.size:
-            raise ValueError(f"Expected {_WIRE_LOG_STRUCT.size} bytes, got {len(data)}")
+            raise ValueError(
+                f"Expected {_WIRE_LOG_STRUCT.size} bytes, got {len(data)}")
         msg_id, text_bytes, severity, component = _WIRE_LOG_STRUCT.unpack(data)
         text = text_bytes.rstrip(b"\x00").decode(errors="replace")
         return LogPayload(
@@ -80,7 +82,8 @@ class LogPayload:
         )
 
 
-# ── UdpClient ─────────────────────────────────────────────────────────────────
+# ── UdpClient ────────────────────────────────────────────────────────
+
 
 class UdpClient:
     """Simple UDP socket that talks to the C++ UDP bridge."""
@@ -105,7 +108,7 @@ class UdpClient:
         self._sock.sendto(log.pack_wire(), self._bridge)
 
     def recv_log(self) -> LogPayload:
-        """Block until a LogMessage arrives (or timeout raises socket.timeout)."""
+        """Block until a LogMessage arrives (or timeout raises timeout)."""
         while True:
             data, _ = self._sock.recvfrom(4096)
             if len(data) != _WIRE_LOG_STRUCT.size:

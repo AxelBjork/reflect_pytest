@@ -19,7 +19,9 @@
                 "ms-python.python",
                 "ms-python.pytest-adapter",
                 // Git
-                "eamodio.gitlens"
+                "eamodio.gitlens",
+                // Markdown
+                "bierner.markdown-mermaid"
             ],
             "settings": {
                 "cmake.generator": "Ninja",

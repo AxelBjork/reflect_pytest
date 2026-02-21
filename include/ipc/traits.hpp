@@ -9,30 +9,31 @@
 // The base template is intentionally left undefined so missing specialisations
 // produce a clear linker error rather than silent misbehaviour.
 
-#include "messages.hpp"
 #include <string_view>
+
+#include "messages.hpp"
 
 namespace ipc {
 
 template <MsgId Id>
-struct MessageTraits; // undefined — every MsgId *must* be specialised
+struct MessageTraits;  // undefined — every MsgId *must* be specialised
 
 template <>
 struct MessageTraits<MsgId::MotorCmd> {
-    using Payload = MotorCmdPayload;
-    static constexpr std::string_view name = "MotorCmd";
+  using Payload = MotorCmdPayload;
+  static constexpr std::string_view name = "MotorCmd";
 };
 
 template <>
 struct MessageTraits<MsgId::SensorData> {
-    using Payload = SensorDataPayload;
-    static constexpr std::string_view name = "SensorData";
+  using Payload = SensorDataPayload;
+  static constexpr std::string_view name = "SensorData";
 };
 
 template <>
 struct MessageTraits<MsgId::Log> {
-    using Payload = LogPayload;
-    static constexpr std::string_view name = "Log";
+  using Payload = LogPayload;
+  static constexpr std::string_view name = "Log";
 };
 
-} // namespace ipc
+}  // namespace ipc
