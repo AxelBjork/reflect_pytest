@@ -16,13 +16,9 @@
 #include <mutex>
 #include <thread>
 
+#include "app_components.h"
 #include "logger.h"
 #include "message_bus.h"
-#include "services/kinematics_service.h"
-#include "services/log_service.h"
-#include "services/motor_service.h"
-#include "services/power_service.h"
-#include "services/state_service.h"
 #include "udp_bridge.h"
 
 static std::atomic<bool> g_running{true};
@@ -42,12 +38,7 @@ int main() {
   ipc::MessageBus bus(kSockPath);
 
   auto logger = sil::create_logger(bus);
-  sil::MotorService ds_motor(bus);
-  sil::KinematicsService ds_kinematics(bus);
-  sil::PowerService ds_power(bus);
-  sil::StateService ds_state(bus);
-  sil::LogService ds_log(bus);
-  ipc::UdpBridge bridge(bus, kUdpPort);
+  auto services = sil::create_app_services(bus);
 
   std::printf("[sil_app] started (UDP bridge on :%u, bus on %s)\n", kUdpPort, kSockPath);
   std::fflush(stdout);

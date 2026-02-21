@@ -10,14 +10,21 @@
 #include <mutex>
 #include <thread>
 
+#include "component.h"
 #include "message_bus.h"
 
 namespace ipc {
 
 class UdpBridge {
  public:
-  // listen_port: UDP port the bridge binds to (bridge listens here).
-  UdpBridge(MessageBus& bus, uint16_t listen_port);
+  using Subscribes =
+      MsgList<MsgId::Log, MsgId::QueryState, MsgId::KinematicsData, MsgId::PowerData>;
+  using Publishes = MsgList<MsgId::QueryState, MsgId::MotorSequence, MsgId::KinematicsRequest,
+                            MsgId::PowerRequest>;
+
+  static constexpr uint16_t kDefaultPort = 9000;
+
+  UdpBridge(MessageBus& bus);
   ~UdpBridge();
 
   UdpBridge(const UdpBridge&) = delete;

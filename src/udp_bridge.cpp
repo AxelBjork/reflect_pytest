@@ -14,7 +14,7 @@ namespace ipc {
 
 static constexpr size_t kMaxDgram = 4096;
 
-UdpBridge::UdpBridge(MessageBus& bus, uint16_t listen_port) : bus_(bus) {
+UdpBridge::UdpBridge(MessageBus& bus) : bus_(bus) {
   udp_fd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
   if (udp_fd_ < 0) throw std::runtime_error("UdpBridge: socket() failed");
 
@@ -24,7 +24,7 @@ UdpBridge::UdpBridge(MessageBus& bus, uint16_t listen_port) : bus_(bus) {
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = INADDR_ANY;
-  addr.sin_port = htons(listen_port);
+  addr.sin_port = htons(kDefaultPort);
 
   if (::bind(udp_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
     ::close(udp_fd_);
@@ -36,8 +36,11 @@ UdpBridge::UdpBridge(MessageBus& bus, uint16_t listen_port) : bus_(bus) {
     throw std::runtime_error("UdpBridge: pipe() failed");
   }
 
-  // Subscribe to every bus message → forward to the UDP peer.
-  bus_.subscribe_all([this](RawMessage msg) { forward_to_udp(std::move(msg)); });
+  // Subscribe to explicit outgoing messages using the type list
+  auto bind_udp = [this]<MsgId... Ids>(MsgList<Ids...>) {
+    (bus_.subscribe(Ids, [this](RawMessage msg) { forward_to_udp(std::move(msg)); }), ...);
+  };
+  bind_udp(Subscribes{});
 
   rx_thread_ = std::thread(&UdpBridge::rx_loop, this);
 }

@@ -5,20 +5,17 @@
 // Run:    ./build/generate_docs > build/doc/ipc_protocol.md
 //         (CMake custom command does this automatically)
 
+#include "app_components.h"
 #include "doc_generator.h"
-#include "services/kinematics_service.h"
-#include "services/log_service.h"
-#include "services/motor_service.h"
-#include "services/power_service.h"
-#include "services/state_service.h"
 
 struct MainPublisher {
   using Subscribes = ipc::MsgList<>;
   using Publishes = ipc::MsgList<ipc::MsgId::Log>;
 };
 
-using AllComponents = std::tuple<sil::MotorService, sil::KinematicsService, sil::PowerService,
-                                 sil::StateService, sil::LogService, MainPublisher>;
+// Combine all sil_app services plus the virtual main publisher thread
+using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>(),
+                                              std::declval<std::tuple<MainPublisher>>()));
 
 int main() {
   // ── Front-matter & module overview ─────────────────────────────────────────
