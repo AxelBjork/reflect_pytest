@@ -30,7 +30,7 @@ class UdpClient:
         self._bridge = (bridge_host, bridge_port)
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.bind(("", client_port))
-        self._sock.settimeout(5.0)
+        self._sock.settimeout(1.0)
 
     def register(self) -> None:
         """Send an empty packet so the bridge records our address."""

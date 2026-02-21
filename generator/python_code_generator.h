@@ -140,8 +140,10 @@ void generate_struct() {
         pack_args += "self." + field_name;
 
         if constexpr (std::is_array_v<typename[:type:]>) {
-          constexpr auto N_chars = std::extent_v<typename[:type:]>;
-          pack_fmt += std::to_string(N_chars) + "s";
+          using ElemT = std::remove_extent_t<typename[:type:]>;
+          constexpr auto N_elems = std::extent_v<typename[:type:]>;
+          constexpr auto byte_count = N_elems * sizeof(ElemT);
+          pack_fmt += std::to_string(byte_count) + "s";
         } else {
           pack_fmt += get_struct_format_char<type>();
         }

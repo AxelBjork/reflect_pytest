@@ -4,6 +4,7 @@ project(reflect_pytest CXX)
 set(CMAKE_CXX_STANDARD 26)  # Requires gcc trunk natively
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_BUILD_RPATH /usr/local/gcc-trunk/lib64)
 
 # ── IPC library ───────────────────────────────────────────────────────────────
 add_library(ipc STATIC

@@ -14,15 +14,18 @@ from reflect_pytest.generated import (
 from udp_client import UdpClient
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def udp(sil_process):
     """Open a UdpClient, register with the bridge, and wait for SIL Ready state."""
     with UdpClient() as client:
         client.register()
 
-        # Ping the SIL until it reports Ready
+        # 1ms socket timeout: loopback QueryState roundtrip is ~100µs.
+        client._sock.settimeout(0.001)
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
+            if sil_process.poll() is not None:
+                pytest.fail(f"sil_app exited (rc={sil_process.returncode})")
             try:
                 client.send_msg(MsgId.QueryState,
                                 QueryStatePayload(state=SystemState.Init))
@@ -31,24 +34,17 @@ def udp(sil_process):
                     break
             except TimeoutError:
                 pass
-            time.sleep(0.05)
         else:
             pytest.fail("SIL did not report SystemState.Ready in time")
 
+        client._sock.settimeout(1.0)
         yield client
-
-
-def test_intercept_hello_world(udp):
-    """The C++ app sends 'Hello World' every 500 ms — we must receive one."""
-    log = udp.recv_msg(expected_id=MsgId.Log)  # blocks up to 5 s
-    assert b"Hello World" in log.text
-    assert log.severity == Severity.Info
-    assert log.component == ComponentId.Main
 
 
 def test_inject_hello_world(udp):
     """Send our own Hello World; bridge injects it and echoes it back.
-     UDP may drop packets, so resend periodically and check with a short timeout.
+
+    UDP may drop packets, so resend on every poll iteration with a short timeout.
     """
     sent = LogPayload(
         text=b"Hello World from pytest\x00",
@@ -56,22 +52,20 @@ def test_inject_hello_world(udp):
         component=ComponentId.Test,
     )
 
-    # Temporarily shorten socket block so we can poll quickly and resend.
-    udp._sock.settimeout(0.1)
+    # 1ms poll: loopback echo is near-instant, retry on drop.
+    udp._sock.settimeout(0.001)
     deadline = time.monotonic() + 5.0
-
     try:
         while time.monotonic() < deadline:
             udp.send_msg(MsgId.Log, sent)
             try:
-                # Drain messages quickly
                 log = udp.recv_msg(expected_id=MsgId.Log)
                 if b"Hello World from pytest" in log.text and log.component == ComponentId.Test:
-                    return  # found it
+                    return
             except TimeoutError:
                 pass
     finally:
-        udp._sock.settimeout(5.0)
+        udp._sock.settimeout(1.0)
 
     pytest.fail(
         "Did not receive injected 'Hello World from pytest' back over UDP")

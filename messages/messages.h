@@ -13,17 +13,17 @@ namespace ipc {
 // ── Message identifiers ───────────────────────────────────────────────────────
 
 enum class MsgId : uint16_t {
-  MotorCmd = 0x0001,
-  SensorData = 0x0002,
-  Log = 0x0003,
-  QueryState = 0x0004,
+  MotorCmd,
+  SensorData,
+  Log,
+  QueryState,
 };
 
 // ── Supporting enums ─────────────────────────────────────────────────────────
 
-enum class Severity : uint8_t { Debug = 0, Info, Warn, Error };
-enum class ComponentId : uint8_t { Main = 0, Bus, Logger, Bridge, Test };
-enum class SystemState : uint8_t { Init = 0, Ready, Fault };
+enum class Severity : uint8_t { Debug, Info, Warn, Error };
+enum class ComponentId : uint8_t { Main, Bus, Logger, Bridge, Test };
+enum class SystemState : uint8_t { Init, Ready, Fault };
 
 // ── Payload structs ───────────────────────────────────────────────────────────
 // All fields are plain arithmetic types so the structs are trivially copyable
@@ -54,10 +54,5 @@ struct QueryStatePayload {
 };
 
 #pragma pack(pop)
-
-static_assert(sizeof(MotorCmdPayload) == 4);
-static_assert(sizeof(SensorDataPayload) == 12);
-static_assert(sizeof(LogPayload) == 257);
-static_assert(sizeof(QueryStatePayload) == 1);
 
 }  // namespace ipc

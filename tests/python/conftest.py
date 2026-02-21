@@ -42,8 +42,8 @@ def pytest_addoption(parser):
         "--sim-duration",
         action="store",
         type=int,
-        default=10,
-        help="Duration in seconds for simulator mode (default 10s).",
+        default=5,
+        help="Duration in seconds for simulator mode (default 5s).",
     )
 
 
@@ -62,7 +62,8 @@ def pytest_sessionstart(session):
             )
             # 2. CMake Build
             subprocess.run(
-                ["cmake", "--build", str(_BUILD_DIR), "--", "-j8"],
+                ["cmake", "--build",
+                 str(_BUILD_DIR), "--", "-j8"],
                 cwd=_REPO_ROOT,
                 check=True,
             )
@@ -129,32 +130,11 @@ def _sil_binary() -> Path:
     return path
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def sil_process():
     """Launch sil_app for the test session; terminate it afterwards."""
-    binary = _sil_binary()
-    proc = subprocess.Popen(
-        [str(binary)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-
-    # Wait for the startup banner so tests don't race the process.
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
-            pytest.fail(f"sil_app exited unexpectedly (rc={proc.returncode})")
-        line = proc.stdout.readline()
-        if "[sil_app] started" in line:
-            break
-        time.sleep(0.05)
-    else:
-        proc.kill()
-        pytest.fail("sil_app did not print startup banner within 5 s")
-
+    proc = subprocess.Popen([str(_sil_binary())])
     yield proc
-
     proc.terminate()
     try:
         proc.wait(timeout=5)

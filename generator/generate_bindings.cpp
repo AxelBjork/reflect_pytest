@@ -6,11 +6,16 @@ int main() {
   std::cout << "from dataclasses import dataclass\n";
   std::cout << "from enum import IntEnum\n\n";
 
+  // ── Enums ──────────────────────────────────────────────────────────────────
   generate_enum<ipc::MsgId>();
   generate_enum<ipc::Severity>();
   generate_enum<ipc::ComponentId>();
   generate_enum<ipc::SystemState>();
 
+  // ── Helper structs (not top-level messages) ────────────────────────────────
+  generate_struct<ipc::MotorSubCmd>();
+
+  // ── Message payload structs ────────────────────────────────────────────────
   constexpr std::size_t num_msgs = get_enum_size<ipc::MsgId>();
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
