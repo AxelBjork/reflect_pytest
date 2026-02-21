@@ -1,0 +1,32 @@
+{
+    "name": "C++ / pytest",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "remoteUser": "vscode",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                // C++ core
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vscode.cmake-tools",
+                // Linting / formatting
+                "llvm-vs-code-extensions.vscode-clangd",
+                "notskm.clang-tidy",
+                // Python / pytest
+                "ms-python.python",
+                "ms-python.pytest-adapter",
+                // Git
+                "eamodio.gitlens"
+            ],
+            "settings": {
+                "cmake.generator": "Ninja",
+                "C_Cpp.default.compilerPath": "/usr/bin/g++",
+                "python.defaultInterpreterPath": "/usr/bin/python3",
+                "python.testing.pytestEnabled": true
+            }
+        }
+    }
+}
