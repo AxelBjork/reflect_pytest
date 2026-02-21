@@ -23,7 +23,7 @@
 // constexpr constructors as long as all members are public and they don't have
 // user-defined copy/move/destroy operations.
 
-#if defined(__cpp_reflection)
+#if defined(REFLECT_DOCS)
 #define DOC_DESC(...) [[= doc::Desc(__VA_ARGS__)]]
 #else
 #define DOC_DESC(...)
@@ -33,8 +33,14 @@ namespace doc {
 
 // Human-readable description of a struct or enum.
 struct Desc {
-  const char* text;
-  constexpr Desc(const char* t) : text(t) {
+  char text[512]{};
+  constexpr Desc(const char* t) {
+    int i = 0;
+    while (t[i] != '\0' && i < 511) {
+      text[i] = t[i];
+      i++;
+    }
+    text[i] = '\0';
   }
 };
 

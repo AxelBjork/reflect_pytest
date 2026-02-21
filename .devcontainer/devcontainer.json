@@ -1,9 +1,6 @@
 {
     "name": "C++ / pytest",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "context": ".."
-    },
+    "image": "reflectpytest:latest",
     "remoteUser": "vscode",
     "customizations": {
         "vscode": {

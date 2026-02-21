@@ -13,8 +13,15 @@ inline constexpr float V_MAX = 12.6f;
 inline constexpr float V_MIN = 10.5f;
 
 class DOC_DESC(
-    "Models a simple battery pack. Voltage drops dynamically under motor load based on "
-    "internal resistance, tracking state of charge over time.") PowerService {
+    "Models a simple battery pack dynamically responding to motor load.\n\n"
+    "The simulation calculates the current drawn by the motor based on its speed, then applies "
+    "Ohm's law over the internal resistance to calculate the instantaneous voltage drop. "
+    "The state of charge (SOC) is linearly interpolated between the maximum and minimum voltage "
+    "limits:\n\n"
+    "$$ I = |\\text{RPM}| \\times 0.005 \\text{ (A)} $$\n\n"
+    "$$ V \\mathrel{-}= I \\times R_{int} \\times dt $$\n\n"
+    "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$")
+PowerService {
  public:
   using Subscribes =
       ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::PowerRequest, ipc::MsgId::StateChange>;

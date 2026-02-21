@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <condition_variable>
 #include <cstdio>
 #include <mutex>
 #include <thread>
@@ -8,8 +9,12 @@
 
 namespace sil {
 
-class DOC_DESC("Periodically aggregates system state into human-readable text logs for debugging.")
-    LogService {
+class DOC_DESC(
+    "Periodically aggregates system state into human-readable text logs for debugging.\n\n"
+    "It acts as an internal observer, keeping track of the latest kinematics, power, and state "
+    "metrics, "
+    "and broadcasts a formatted string representation at a fixed interval to track the "
+    "simulation's progress.") LogService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::StateChange>;
   using Publishes = ipc::MsgList<ipc::MsgId::Log>;
@@ -26,8 +31,9 @@ class DOC_DESC("Periodically aggregates system state into human-readable text lo
  private:
   ipc::MessageBus& bus_;
   std::mutex mu_;
+  std::condition_variable cv_;
   std::thread log_thread_;
-  std::atomic<bool> running_{true};
+  bool running_{true};
 
   ipc::SystemState state_{ipc::SystemState::Ready};
   uint32_t cmd_id_{0};

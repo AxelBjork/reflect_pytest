@@ -5,7 +5,13 @@
 
 namespace sil {
 
-class DOC_DESC("Maintains the central lifecycle state machine of the simulation.") StateService {
+class DOC_DESC(
+    "Maintains the central lifecycle state machine of the simulation.\n\n"
+    "This component passively tracks the top-level simulated system state (Init, Ready, Executing, "
+    "Fault) "
+    "by listening to internal state transitions and makes it available to external clients via "
+    "ping requests.")
+StateService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::StateChange, ipc::MsgId::QueryState>;
   using Publishes = ipc::MsgList<ipc::MsgId::QueryState>;

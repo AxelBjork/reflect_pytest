@@ -24,6 +24,7 @@ target_link_libraries(sil_app PRIVATE ipc)
 add_executable(generate_bindings generator/generate_bindings.cpp)
 target_include_directories(generate_bindings PRIVATE generator src messages)
 target_compile_options(generate_bindings PRIVATE -freflection)
+target_compile_definitions(generate_bindings PRIVATE REFLECT_DOCS)
 
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py
@@ -41,17 +42,18 @@ add_dependencies(sil_app python_bindings)
 add_executable(generate_docs generator/generate_docs.cpp)
 target_include_directories(generate_docs PRIVATE generator src messages)
 target_compile_options(generate_docs PRIVATE -freflection)
+target_compile_definitions(generate_docs PRIVATE REFLECT_DOCS)
 
 add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/doc/ipc_protocol.md
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/doc
-    COMMAND generate_docs > ${CMAKE_BINARY_DIR}/doc/ipc_protocol.md
+    OUTPUT ${CMAKE_SOURCE_DIR}/doc/ipc_protocol.md
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/doc
+    COMMAND generate_docs > ${CMAKE_SOURCE_DIR}/doc/ipc_protocol.md
     DEPENDS generate_docs
     COMMENT "Generating IPC protocol Markdown documentation..."
 )
 
 add_custom_target(protocol_docs ALL
-    DEPENDS ${CMAKE_BINARY_DIR}/doc/ipc_protocol.md
+    DEPENDS ${CMAKE_SOURCE_DIR}/doc/ipc_protocol.md
 )
 
 # ── GoogleTest ────────────────────────────────────────────────────────────────

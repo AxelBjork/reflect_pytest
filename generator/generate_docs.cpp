@@ -55,10 +55,10 @@ void emit_components() {
     (..., [] {
       using C = std::tuple_element_t<Is, Components>;
       constexpr auto R = ^^C;
-      const std::string name{std::meta::identifier_of(R)};
-      const char* desc = get_desc<R>();
-      if (*desc) {
-        std::cout << "### `" << name << "`\n\n> " << desc << "\n\n";
+      const std::string name{cpp_type_name_str<C>()};
+      constexpr auto desc = get_desc<R>();
+      if (desc.text[0] != '\0') {
+        std::cout << "### `" << name << "`\n\n> " << desc.text << "\n\n";
       }
     }());
   }(std::make_index_sequence<num_components>{});

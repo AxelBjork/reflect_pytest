@@ -23,6 +23,10 @@ using namespace std::string_view_literals;
 // -------------------------------------------------------------------------------------------------
 // Forward declarations
 // -------------------------------------------------------------------------------------------------
+namespace ipc {
+class UdpBridge;
+}
+
 template <typename T>
 std::string cpp_type_name_str();
 
@@ -54,23 +58,53 @@ consteval bool component_publishes() {
 }
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-consteval bool any_subscribes_impl(std::index_sequence<Is...>) {
-  return (component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() || ...);
+consteval bool internal_cxx_subscribes_impl(std::index_sequence<Is...>) {
+  return ((component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() &&
+           !std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
+          ...);
 }
 
 template <typename Tuple, ipc::MsgId Id>
-consteval bool any_cxx_subscribes() {
-  return any_subscribes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+consteval bool internal_cxx_subscribes() {
+  return internal_cxx_subscribes_impl<Tuple, Id>(
+      std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-consteval bool any_publishes_impl(std::index_sequence<Is...>) {
-  return (component_publishes<std::tuple_element_t<Is, Tuple>, Id>() || ...);
+consteval bool internal_cxx_publishes_impl(std::index_sequence<Is...>) {
+  return ((component_publishes<std::tuple_element_t<Is, Tuple>, Id>() &&
+           !std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
+          ...);
 }
 
 template <typename Tuple, ipc::MsgId Id>
-consteval bool any_cxx_publishes() {
-  return any_publishes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+consteval bool internal_cxx_publishes() {
+  return internal_cxx_publishes_impl<Tuple, Id>(
+      std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+consteval bool py_subscribes_impl(std::index_sequence<Is...>) {
+  return ((component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() &&
+           std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
+          ...);
+}
+
+template <typename Tuple, ipc::MsgId Id>
+consteval bool py_subscribes() {
+  return py_subscribes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+consteval bool py_publishes_impl(std::index_sequence<Is...>) {
+  return ((component_publishes<std::tuple_element_t<Is, Tuple>, Id>() &&
+           std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
+          ...);
+}
+
+template <typename Tuple, ipc::MsgId Id>
+consteval bool py_publishes() {
+  return py_publishes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
@@ -80,7 +114,12 @@ void print_subscribers_impl(std::index_sequence<Is...>) {
     using Comp = std::tuple_element_t<Is, Tuple>;
     if constexpr (component_subscribes<Comp, Id>()) {
       if (!first) std::cout << ", ";
-      std::cout << "`" << cpp_type_name_str<Comp>() << "`";
+      std::string cname = cpp_type_name_str<Comp>();
+      if (cname == "UdpBridge") {
+        std::cout << "`Python (pytest)`";
+      } else {
+        std::cout << "`" << cname << "`";
+      }
       first = false;
     }
   }());
@@ -99,7 +138,12 @@ void print_publishers_impl(std::index_sequence<Is...>) {
     using Comp = std::tuple_element_t<Is, Tuple>;
     if constexpr (component_publishes<Comp, Id>()) {
       if (!first) std::cout << ", ";
-      std::cout << "`" << cpp_type_name_str<Comp>() << "`";
+      std::string cname = cpp_type_name_str<Comp>();
+      if (cname == "UdpBridge") {
+        std::cout << "`Python (pytest)`";
+      } else {
+        std::cout << "`" << cname << "`";
+      }
       first = false;
     }
   }());
@@ -163,13 +207,16 @@ struct DocStructArrHolder {
 
 // Returns doc::Desc::text if the entity has one, otherwise "".
 template <std::meta::info R>
-consteval const char* get_desc() {
+consteval doc::Desc get_desc() {
   for (std::meta::info a : std::meta::annotations_of(R)) {
     if (std::meta::type_of(a) == ^^doc::Desc) {
-      return std::meta::extract<doc::Desc>(a).text;
+      return std::meta::extract<doc::Desc>(a);
+    }
+    if (std::meta::type_of(a) == ^^const doc::Desc) {
+      return std::meta::extract<const doc::Desc>(a);
     }
   }
-  return "";
+  return doc::Desc("");
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -303,7 +350,7 @@ void emit_md_enum_section() {
   constexpr auto R = ^^E;
   const std::string name{std::meta::identifier_of(R)};
 
-  const char* desc = get_desc<R>();
+  constexpr doc::Desc desc = get_desc<R>();
 
   using U = std::underlying_type_t<E>;
   const char* underlying = []() -> const char* {
@@ -324,7 +371,7 @@ void emit_md_enum_section() {
   }();
 
   std::cout << "### `" << name << "` (`" << underlying << "`)\n\n";
-  if (*desc) std::cout << "> " << desc << "\n\n";
+  if (desc.text[0] != '\0') std::cout << "> " << desc.text << "\n\n";
 
   std::cout << "| Enumerator | Value |\n";
   std::cout << "|---|---|\n";
@@ -353,10 +400,10 @@ void emit_md_struct_section(std::set<std::string>& visited) {
     return;
   }
 
-  const char* desc = get_desc<R>();
+  constexpr doc::Desc desc = get_desc<R>();
 
   std::cout << "#### Sub-struct: `" << name << "`\n\n";
-  if (*desc) std::cout << "> " << desc << "\n\n";
+  if (desc.text[0] != '\0') std::cout << "> " << desc.text << "\n\n";
   std::cout << "**Wire size:** " << sizeof(T) << " bytes\n\n";
 
   emit_field_table<T>(visited);
@@ -382,20 +429,22 @@ void emit_md_payload_section() {
   constexpr auto R = ^^Payload;
   constexpr auto mid = static_cast<ipc::MsgId>(Id);
   constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
-  const char* desc = get_desc<R>();
+  constexpr doc::Desc desc = get_desc<R>();
   const std::string sname{std::meta::identifier_of(R)};
   std::cout << "### `MsgId::" << mname << "` (`" << sname << "`)\n\n";
-  if (*desc) std::cout << "> " << desc << "\n\n";
+  if (desc.text[0] != '\0') std::cout << "> " << desc.text << "\n\n";
 
-  constexpr bool cxx_sub = any_cxx_subscribes<Components, mid>();
-  constexpr bool cxx_pub = any_cxx_publishes<Components, mid>();
+  constexpr bool cxx_sub = internal_cxx_subscribes<Components, mid>();
+  constexpr bool cxx_pub = internal_cxx_publishes<Components, mid>();
+  constexpr bool py_sub = py_subscribes<Components, mid>();
+  constexpr bool py_pub = py_publishes<Components, mid>();
 
   const char* direction = "Internal (C++ ↔ C++)";
-  if (cxx_sub && !cxx_pub)
+  if (py_pub && cxx_sub && !py_sub && !cxx_pub)
     direction = "Python → C++";
-  else if (!cxx_sub && cxx_pub)
+  else if (cxx_pub && py_sub && !cxx_sub && !py_pub)
     direction = "C++ → Python";
-  else if (cxx_sub && cxx_pub && mid != ipc::MsgId::PhysicsTick && mid != ipc::MsgId::StateChange)
+  else if ((py_pub || py_sub) && (cxx_pub || cxx_sub))
     direction = "Bidirectional";
 
   std::cout << "**Direction:** `" << direction << "`<br>\n";
@@ -431,19 +480,17 @@ void emit_mermaid_edge_for_msg_id() {
     constexpr auto mid = static_cast<ipc::MsgId>(Id);
     constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
 
-    constexpr bool cxx_sub = any_cxx_subscribes<Components, mid>();
-    constexpr bool cxx_pub = any_cxx_publishes<Components, mid>();
+    constexpr bool cxx_sub = internal_cxx_subscribes<Components, mid>();
+    constexpr bool cxx_pub = internal_cxx_publishes<Components, mid>();
+    constexpr bool py_sub = py_subscribes<Components, mid>();
+    constexpr bool py_pub = py_publishes<Components, mid>();
 
-    if (cxx_sub && !cxx_pub) {
+    if (py_pub && cxx_sub && !cxx_pub && !py_sub) {
       std::cout << "    PY -->|" << mname << "| CXX\n";
-    } else if (!cxx_sub && cxx_pub) {
+    } else if (cxx_pub && py_sub && !py_pub && !cxx_sub) {
       std::cout << "    CXX -->|" << mname << "| PY\n";
-    } else if (cxx_sub && cxx_pub) {
-      if constexpr (mid == ipc::MsgId::PhysicsTick || mid == ipc::MsgId::StateChange) {
-        // purely internal, skip diagram
-      } else {
-        std::cout << "    PY <-->|" << mname << "| CXX\n";
-      }
+    } else if ((py_pub || py_sub) && (cxx_pub || cxx_sub)) {
+      std::cout << "    PY <-->|" << mname << "| CXX\n";
     }
   }
 }
