@@ -6,6 +6,19 @@
 //         (CMake custom command does this automatically)
 
 #include "doc_generator.h"
+#include "services/kinematics_service.h"
+#include "services/log_service.h"
+#include "services/motor_service.h"
+#include "services/power_service.h"
+#include "services/state_service.h"
+
+struct MainPublisher {
+  using Subscribes = ipc::MsgList<>;
+  using Publishes = ipc::MsgList<ipc::MsgId::Log>;
+};
+
+using AllComponents = std::tuple<sil::MotorService, sil::KinematicsService, sil::PowerService,
+                                 sil::StateService, sil::LogService, MainPublisher>;
 
 int main() {
   // ── Front-matter & module overview ─────────────────────────────────────────
@@ -53,7 +66,7 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 )";
 
-  emit_mermaid_flow();
+  emit_mermaid_flow<AllComponents>();
 
   // ── Enums ───────────────────────────────────────────────────────────────────
   std::cout << "---\n\n## Enums\n\n";
@@ -72,7 +85,7 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
     (..., [] {
       constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      emit_md_payload_section_for_msg_id<val>();
+      emit_md_payload_section_for_msg_id<AllComponents, val>();
     }());
   }(std::make_index_sequence<num_msgs>{});
 

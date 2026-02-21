@@ -14,10 +14,58 @@
 #include <string_view>
 #include <type_traits>
 
+#include "component.h"
 #include "messages.h"
 #include "traits.h"
 
 using namespace std::string_view_literals;
+
+// -------------------------------------------------------------------------------------------------
+// Component Sub/Pub Helpers
+// -------------------------------------------------------------------------------------------------
+
+template <ipc::MsgId Id>
+consteval bool contains_msg(ipc::MsgList<>) {
+  return false;
+}
+
+template <ipc::MsgId Id, ipc::MsgId First, ipc::MsgId... Rest>
+consteval bool contains_msg(ipc::MsgList<First, Rest...>) {
+  if constexpr (Id == First)
+    return true;
+  else
+    return contains_msg<Id>(ipc::MsgList<Rest...>{});
+}
+
+template <typename Component, ipc::MsgId Id>
+consteval bool component_subscribes() {
+  return contains_msg<Id>(typename Component::Subscribes{});
+}
+
+template <typename Component, ipc::MsgId Id>
+consteval bool component_publishes() {
+  return contains_msg<Id>(typename Component::Publishes{});
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+consteval bool any_subscribes_impl(std::index_sequence<Is...>) {
+  return (component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() || ...);
+}
+
+template <typename Tuple, ipc::MsgId Id>
+consteval bool any_cxx_subscribes() {
+  return any_subscribes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+consteval bool any_publishes_impl(std::index_sequence<Is...>) {
+  return (component_publishes<std::tuple_element_t<Is, Tuple>, Id>() || ...);
+}
+
+template <typename Tuple, ipc::MsgId Id>
+consteval bool any_cxx_publishes() {
+  return any_publishes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
 
 // -------------------------------------------------------------------------------------------------
 // Enum helpers (independent of python_code_generator.h)
@@ -285,7 +333,7 @@ struct doc_payload_or_void<
   using type = typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload;
 };
 
-template <typename Payload, uint32_t Id>
+template <typename Components, typename Payload, uint32_t Id>
 void emit_md_payload_section() {
   constexpr auto R = ^^Payload;
   constexpr auto mid = static_cast<ipc::MsgId>(Id);
@@ -294,6 +342,19 @@ void emit_md_payload_section() {
   const std::string sname{std::meta::identifier_of(R)};
   std::cout << "### `MsgId::" << mname << "` (`" << sname << "`)\n\n";
   if (*desc) std::cout << "> " << desc << "\n\n";
+
+  constexpr bool cxx_sub = any_cxx_subscribes<Components, mid>();
+  constexpr bool cxx_pub = any_cxx_publishes<Components, mid>();
+
+  const char* direction = "Internal (C++ ↔ C++)";
+  if (cxx_sub && !cxx_pub)
+    direction = "Python → C++";
+  else if (!cxx_sub && cxx_pub)
+    direction = "C++ → Python";
+  else if (cxx_sub && cxx_pub && mid != ipc::MsgId::PhysicsTick && mid != ipc::MsgId::StateChange)
+    direction = "Bidirectional";
+
+  std::cout << "**Direction:** `" << direction << "`<br>\n";
   std::cout << "**Wire size:** " << sizeof(Payload) << " bytes\n\n";
 
   std::set<std::string> visited;
@@ -301,11 +362,11 @@ void emit_md_payload_section() {
 }
 
 // Emit a full payload section (heading + description + field table) for one MsgId.
-template <uint32_t Id>
+template <typename Components, uint32_t Id>
 void emit_md_payload_section_for_msg_id() {
   using T = typename doc_payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
-    emit_md_payload_section<T, Id>();
+    emit_md_payload_section<Components, T, Id>();
   }
 }
 
@@ -313,17 +374,31 @@ void emit_md_payload_section_for_msg_id() {
 // Mermaid message-flow diagram
 // -------------------------------------------------------------------------------------------------
 
-template <uint32_t Id>
+template <typename Components, uint32_t Id>
 void emit_mermaid_edge_for_msg_id() {
   using T = typename doc_payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
     constexpr auto mid = static_cast<ipc::MsgId>(Id);
     constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
-    // We lost direction but we can point it as double ended
-    std::cout << "    PY <-->|" << mname << "| CXX\n";
+
+    constexpr bool cxx_sub = any_cxx_subscribes<Components, mid>();
+    constexpr bool cxx_pub = any_cxx_publishes<Components, mid>();
+
+    if (cxx_sub && !cxx_pub) {
+      std::cout << "    PY -->|" << mname << "| CXX\n";
+    } else if (!cxx_sub && cxx_pub) {
+      std::cout << "    CXX -->|" << mname << "| PY\n";
+    } else if (cxx_sub && cxx_pub) {
+      if constexpr (mid == ipc::MsgId::PhysicsTick || mid == ipc::MsgId::StateChange) {
+        // purely internal, skip diagram
+      } else {
+        std::cout << "    PY <-->|" << mname << "| CXX\n";
+      }
+    }
   }
 }
 
+template <typename Components>
 void emit_mermaid_flow() {
   constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
 
@@ -335,7 +410,7 @@ void emit_mermaid_flow() {
     (..., [] {
       constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      emit_mermaid_edge_for_msg_id<val>();
+      emit_mermaid_edge_for_msg_id<Components, val>();
     }());
   }(std::make_index_sequence<num_msgs>{});
 

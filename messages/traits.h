@@ -42,11 +42,23 @@ template <>
 struct MessageTraits<MsgId::PowerRequest> {
   using Payload = PowerRequestPayload;
   static constexpr std::string_view name = "PowerRequest";
-};  
+};
 template <>
 struct MessageTraits<MsgId::PowerData> {
   using Payload = PowerPayload;
   static constexpr std::string_view name = "PowerData";
+};
+
+template <>
+struct MessageTraits<MsgId::PhysicsTick> {
+  using Payload = PhysicsTickPayload;
+  static constexpr std::string_view name = "PhysicsTick";
+};
+
+template <>
+struct MessageTraits<MsgId::StateChange> {
+  using Payload = StateChangePayload;
+  static constexpr std::string_view name = "StateChange";
 };
 
 }  // namespace ipc

@@ -3,8 +3,8 @@
 // Threads:
 //   main         — waits on g_running (futex); zero CPU until signal
 //   heartbeat    — publishes "Hello World #N" every 500 ms; wakes on shutdown
-//   sim-exec     — inside Simulator: steps through MotorSubCmds in real time
-//   sim-log      — inside Simulator: logs status every 1 000 ms
+//   sim-exec     — inside MotorService: steps through MotorSubCmds in real time
+//   sim-log      — inside LogService: logs status every 1 000 ms
 //   bus-listener — inside MessageBus: AF_UNIX recv → dispatch
 //   logger       — dedicated: prints every LogMessage
 //   bridge-rx    — inside UdpBridge: UDP recv → bus inject
@@ -18,7 +18,11 @@
 
 #include "logger.h"
 #include "message_bus.h"
-#include "simulator.h"
+#include "services/kinematics_service.h"
+#include "services/log_service.h"
+#include "services/motor_service.h"
+#include "services/power_service.h"
+#include "services/state_service.h"
 #include "udp_bridge.h"
 
 static std::atomic<bool> g_running{true};
@@ -38,7 +42,11 @@ int main() {
   ipc::MessageBus bus(kSockPath);
 
   auto logger = sil::create_logger(bus);
-  sil::Simulator simulator(bus);  // handles QueryState, MotorSequence, Kinematics/Power
+  sil::MotorService ds_motor(bus);
+  sil::KinematicsService ds_kinematics(bus);
+  sil::PowerService ds_power(bus);
+  sil::StateService ds_state(bus);
+  sil::LogService ds_log(bus);
   ipc::UdpBridge bridge(bus, kUdpPort);
 
   std::printf("[sil_app] started (UDP bridge on :%u, bus on %s)\n", kUdpPort, kSockPath);

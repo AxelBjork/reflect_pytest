@@ -1,7 +1,6 @@
 #pragma once
 // ipc/message_bus.hpp — AF_UNIX-backed in-process pub/sub bus.
 
-#include <atomic>
 #include <functional>
 #include <mutex>
 #include <thread>

@@ -47,6 +47,10 @@ enum class[[= doc::Desc("Top-level message type selector. The uint16_t wire valu
   KinematicsData,     // C++ -> Python: kinematics snapshot response
   PowerRequest,       // Python -> C++: query power state (1-byte request)
   PowerData,          // C++ -> Python: power snapshot response
+
+  // -- Internal Component IPC --
+  PhysicsTick,  // Motor -> Others: 100Hz tick with RPM and dt_us
+  StateChange,  // Motor -> Others: SystemState transition
 };
 
 // ── Supporting enums ─────────────────────────────────────────────────────────
@@ -142,6 +146,21 @@ struct[[= doc::Desc("Power-model snapshot sent in response to a PowerRequest. "
   float voltage_v;
   float current_a;
   uint8_t state_of_charge;
+};
+
+// ── Internal Component IPC ───────────────────────────────────────────────────
+
+struct[[= doc::Desc("Internal IPC: Broadcast at 100Hz during sequence execution "
+                    "to drive kinematics and power integration.")]] PhysicsTickPayload {
+  uint32_t cmd_id;
+  int16_t speed_rpm;
+  uint32_t dt_us;
+};
+
+struct[[= doc::Desc("Internal IPC: Broadcast when moving into or out of Executing state.")]]
+    StateChangePayload {
+  SystemState state;
+  uint32_t cmd_id;
 };
 
 #pragma pack(pop)
