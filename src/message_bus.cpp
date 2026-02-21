@@ -1,6 +1,6 @@
 // ipc/message_bus.cpp
 
-#include "ipc/message_bus.hpp"
+#include "message_bus.h"
 
 #include <sys/select.h>
 #include <unistd.h>

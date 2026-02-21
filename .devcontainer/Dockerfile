@@ -17,18 +17,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# ── GCC Trunk Nightly ────────────────────────────────────────────────────────
-# Using ubuntu:rolling gives us access to gcc-15 natively which serves as the 
-# GCC trunk nightly required for C++26 static reflection (P2996).
+# ── GCC Trunk Compilation for C++26 Reflection ───────────────────────────────
+# Compile GCC from current trunk source to leverage new P2996 reflection merge
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc-15 \
-    g++-15 \
-    # Register snapshot at priority 200 so it wins over build-essential's gcc
-    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 200 \
-    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-15 200 \
-    && update-alternatives --install /usr/bin/cc  cc  /usr/bin/gcc-15 200 \
-    && update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++-15 200 \
+    flex \
+    bison \
     && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 git://gcc.gnu.org/git/gcc.git /tmp/gcc-source && \
+    cd /tmp/gcc-source && \
+    ./contrib/download_prerequisites && \
+    mkdir build && cd build && \
+    ../configure --disable-bootstrap --enable-languages=c,c++ --disable-multilib --prefix=/usr/local/gcc-trunk && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/gcc-source
 
 # ── Core C++ tooling ──────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -1,0 +1,37 @@
+#pragma once
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
+#include "component.h"
+
+namespace sil {
+
+class DOC_DESC("Manages the thread that executes timed motor commands in real-time.") MotorService {
+ public:
+  using Subscribes = ipc::MsgList<ipc::MsgId::MotorSequence>;
+  using Publishes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::StateChange>;
+
+  explicit MotorService(ipc::MessageBus& bus);
+  ~MotorService();
+
+  MotorService(const MotorService&) = delete;
+  MotorService& operator=(const MotorService&) = delete;
+
+  void on_message(const ipc::MotorSequencePayload& cmd);
+
+ private:
+  ipc::MessageBus& bus_;
+  std::mutex mu_;
+  std::condition_variable cv_;
+  std::thread exec_thread_;
+  std::atomic<bool> running_{true};
+
+  bool have_cmd_{false};
+  ipc::MotorSequencePayload pending_cmd_{};
+
+  void exec_loop();
+};
+
+}  // namespace sil

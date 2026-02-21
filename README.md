@@ -70,7 +70,10 @@ pytest tests/python/ --build -v
 # 2. Run the SIL suite only (app must be built)
 pytest tests/python/ -v
 
-# 3. Simulator Mode: Run the C++ app for 10 seconds (no Python tests)
+# 3. Stream sil_app output live to your terminal during tests
+pytest tests/python/ -v -s
+
+# 4. Simulator Mode: Run the C++ app for 10 seconds (no Python tests)
 pytest tests/python/ --simulator --sim-duration 10
 ```
 

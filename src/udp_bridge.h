@@ -10,14 +10,23 @@
 #include <mutex>
 #include <thread>
 
-#include "message_bus.hpp"
+#include "component.h"
+#include "message_bus.h"
 
 namespace ipc {
 
-class UdpBridge {
+class DOC_DESC(
+    "Stateful bridge that relays IPC messages between the internal MessageBus and external "
+    "UDP clients for bidirectional testing.") UdpBridge {
  public:
-  // listen_port: UDP port the bridge binds to (bridge listens here).
-  UdpBridge(MessageBus& bus, uint16_t listen_port);
+  using Subscribes =
+      MsgList<MsgId::Log, MsgId::QueryState, MsgId::KinematicsData, MsgId::PowerData>;
+  using Publishes = MsgList<MsgId::QueryState, MsgId::MotorSequence, MsgId::KinematicsRequest,
+                            MsgId::PowerRequest>;
+
+  static constexpr uint16_t kDefaultPort = 9000;
+
+  UdpBridge(MessageBus& bus);
   ~UdpBridge();
 
   UdpBridge(const UdpBridge&) = delete;
