@@ -27,14 +27,14 @@ target_compile_options(generate_bindings PRIVATE -freflection)
 target_compile_definitions(generate_bindings PRIVATE REFLECT_DOCS)
 
 add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py
-    COMMAND generate_bindings > ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py
+    OUTPUT ${CMAKE_SOURCE_DIR}/tests/python/reflect_pytest/generated.py
+    COMMAND generate_bindings > ${CMAKE_SOURCE_DIR}/tests/python/reflect_pytest/generated.py
     DEPENDS generate_bindings
     COMMENT "Generating Python bindings using C++ reflection..."
 )
 
 add_custom_target(python_bindings ALL
-    DEPENDS ${CMAKE_BINARY_DIR}/python/reflect_pytest/generated.py
+    DEPENDS ${CMAKE_SOURCE_DIR}/tests/python/reflect_pytest/generated.py
 )
 add_dependencies(sil_app python_bindings)
 

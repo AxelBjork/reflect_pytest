@@ -4,10 +4,12 @@
 //
 // Companion to python_code_generator.h; included only by generate_docs.cpp.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <meta>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
