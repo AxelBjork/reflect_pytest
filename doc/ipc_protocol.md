@@ -40,15 +40,53 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 ```mermaid
 flowchart LR
-    PY(["Python / pytest"])
-    CXX(["C++ SIL"])
-    CXX -->|Log| PY
-    PY <-->|QueryState| CXX
-    PY -->|MotorSequence| CXX
-    PY -->|KinematicsRequest| CXX
-    CXX -->|KinematicsData| PY
-    PY -->|PowerRequest| CXX
-    CXX -->|PowerData| PY
+    %% ─── COLUMN 1: Pytest Test Harness ───
+    subgraph py["Pytest SIL Environment"]
+        TestCase(["Test Case / Fixtures"])
+    end
+
+    %% ─── COLUMN 2: Python UDP Client & Kernel Routing ───
+    subgraph net["UdpClient (127.0.0.1)"]
+        direction TB
+        TX(["TX Socket<br/>Port 9000<br/>==============<br/>(sendto)"])
+        RX(["RX Socket<br/>Port 9001<br/>==============<br/>(recvfrom)"])
+    end
+
+    %% ─── COLUMN 3: C++ SUT ───
+    subgraph sim["Simulator"]
+        MotorService(["MotorService<br/><br/>Manages the thread that executes<br/>timed motor commands in real-time."])
+        KinematicsService(["KinematicsService<br/><br/>Simulates vehicle motion by<br/>integrating motor RPM over time to<br/>track position and linear velocity."])
+        PowerService(["PowerService<br/><br/>Models a simple battery pack<br/>dynamically responding to motor<br/>load."])
+        StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine of the simulation."])
+        LogService(["LogService<br/><br/>Periodically aggregates system<br/>state into human-readable text logs<br/>for debugging."])
+        UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
+        MainPublisher(["MainPublisher"])
+
+        %% Pure Internal Messages
+        MotorService -.->|PhysicsTick,<br/>StateChange| KinematicsService
+        MotorService -.->|PhysicsTick,<br/>StateChange| PowerService
+        MotorService -.->|StateChange| StateService
+        MotorService -.->|PhysicsTick,<br/>StateChange| LogService
+
+        %% Bridge Distribution
+        LogService -->|Log| UdpBridge
+        MainPublisher -->|Log| UdpBridge
+        UdpBridge -->|QueryState| StateService
+        StateService -->|QueryState| UdpBridge
+        UdpBridge -->|MotorSequence| MotorService
+        UdpBridge -->|KinematicsRequest| KinematicsService
+        KinematicsService -->|KinematicsData| UdpBridge
+        UdpBridge -->|PowerRequest| PowerService
+        PowerService -->|PowerData| UdpBridge
+    end
+
+    %% ─── INBOUND PATH ───
+    TestCase -->|send_msg| TX
+    TX -->|"QueryState<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest"| UdpBridge
+
+    %% ─── OUTBOUND PATH ───
+    UdpBridge -->|"Log<br/>QueryState<br/>KinematicsData<br/>PowerData"| RX
+    RX -->|recv_msg| TestCase
 ```
 
 ---
@@ -123,9 +161,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Unidirectional log/trace message. Emitted by any component at any time; Python receives these passively from the bus.
 
-**Direction:** `C++ → Python`<br>
+**Direction:** `Outbound`<br>
 **Publishes:** `LogService`, `MainPublisher`<br>
-**Subscribes:** `Python (pytest)`<br>
 **Wire size:** 257 bytes
 
 <table>
@@ -162,8 +199,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 > Carries the current SystemState. Python sends this as a request (with any state value); the simulator responds with the actual state.
 
 **Direction:** `Bidirectional`<br>
-**Publishes:** `StateService`, `Python (pytest)`<br>
-**Subscribes:** `StateService`, `Python (pytest)`<br>
+**Publishes:** `StateService`<br>
+**Subscribes:** `StateService`<br>
 **Wire size:** 1 bytes
 
 <table>
@@ -185,8 +222,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence.
 
-**Direction:** `Python → C++`<br>
-**Publishes:** `Python (pytest)`<br>
+**Direction:** `Inbound`<br>
 **Subscribes:** `MotorService`<br>
 **Wire size:** 65 bytes
 
@@ -251,8 +287,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > One-byte sentinel. Send to request a KinematicsData snapshot. The payload value is ignored.
 
-**Direction:** `Python → C++`<br>
-**Publishes:** `Python (pytest)`<br>
+**Direction:** `Inbound`<br>
 **Subscribes:** `KinematicsService`<br>
 **Wire size:** 1 bytes
 
@@ -275,9 +310,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Kinematics snapshot sent in response to a KinematicsRequest. Reflects physics state integrated since the start of the current sequence.
 
-**Direction:** `C++ → Python`<br>
+**Direction:** `Outbound`<br>
 **Publishes:** `KinematicsService`<br>
-**Subscribes:** `Python (pytest)`<br>
 **Wire size:** 16 bytes
 
 <table>
@@ -320,8 +354,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > One-byte sentinel. Send to request a PowerData snapshot. The payload value is ignored.
 
-**Direction:** `Python → C++`<br>
-**Publishes:** `Python (pytest)`<br>
+**Direction:** `Inbound`<br>
 **Subscribes:** `PowerService`<br>
 **Wire size:** 1 bytes
 
@@ -344,9 +377,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Power-model snapshot sent in response to a PowerRequest. Models a simple battery with internal resistance drain.
 
-**Direction:** `C++ → Python`<br>
+**Direction:** `Outbound`<br>
 **Publishes:** `PowerService`<br>
-**Subscribes:** `Python (pytest)`<br>
 **Wire size:** 13 bytes
 
 <table>
@@ -389,7 +421,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration.
 
-**Direction:** `Internal (C++ ↔ C++)`<br>
+**Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
 **Subscribes:** `KinematicsService`, `PowerService`, `LogService`<br>
 **Wire size:** 10 bytes
@@ -427,7 +459,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Internal IPC: Broadcast when moving into or out of Executing state.
 
-**Direction:** `Internal (C++ ↔ C++)`<br>
+**Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
 **Subscribes:** `KinematicsService`, `PowerService`, `StateService`, `LogService`<br>
 **Wire size:** 5 bytes

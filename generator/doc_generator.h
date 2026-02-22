@@ -4,12 +4,10 @@
 //
 // Companion to python_code_generator.h; included only by generate_docs.cpp.
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <meta>
-#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -108,51 +106,49 @@ consteval bool py_publishes() {
 }
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void print_subscribers_impl(std::index_sequence<Is...>) {
+bool print_subscribers_impl(std::index_sequence<Is...>) {
   bool first = true;
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
     if constexpr (component_subscribes<Comp, Id>()) {
-      if (!first) std::cout << ", ";
       std::string cname = cpp_type_name_str<Comp>();
-      if (cname == "UdpBridge") {
-        std::cout << "`Python (pytest)`";
-      } else {
+      if (cname != "UdpBridge") {
+        if (!first) std::cout << ", ";
         std::cout << "`" << cname << "`";
+        first = false;
       }
-      first = false;
     }
   }());
-  if (first) std::cout << "_None_";
+  if (first) return false;
+  return true;
 }
 
 template <typename Tuple, ipc::MsgId Id>
-void print_subscribers() {
-  print_subscribers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+bool print_subscribers() {
+  return print_subscribers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void print_publishers_impl(std::index_sequence<Is...>) {
+bool print_publishers_impl(std::index_sequence<Is...>) {
   bool first = true;
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
     if constexpr (component_publishes<Comp, Id>()) {
-      if (!first) std::cout << ", ";
       std::string cname = cpp_type_name_str<Comp>();
-      if (cname == "UdpBridge") {
-        std::cout << "`Python (pytest)`";
-      } else {
+      if (cname != "UdpBridge") {
+        if (!first) std::cout << ", ";
         std::cout << "`" << cname << "`";
+        first = false;
       }
-      first = false;
     }
   }());
-  if (first) std::cout << "_None_";
+  if (first) return false;
+  return true;
 }
 
 template <typename Tuple, ipc::MsgId Id>
-void print_publishers() {
-  print_publishers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+bool print_publishers() {
+  return print_publishers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -439,21 +435,32 @@ void emit_md_payload_section() {
   constexpr bool py_sub = py_subscribes<Components, mid>();
   constexpr bool py_pub = py_publishes<Components, mid>();
 
-  const char* direction = "Internal (C++ ↔ C++)";
+  const char* direction = "Internal";
   if (py_pub && cxx_sub && !py_sub && !cxx_pub)
-    direction = "Python → C++";
+    direction = "Inbound";
   else if (cxx_pub && py_sub && !cxx_sub && !py_pub)
-    direction = "C++ → Python";
+    direction = "Outbound";
   else if ((py_pub || py_sub) && (cxx_pub || cxx_sub))
     direction = "Bidirectional";
 
   std::cout << "**Direction:** `" << direction << "`<br>\n";
-  std::cout << "**Publishes:** ";
-  print_publishers<Components, mid>();
-  std::cout << "<br>\n";
-  std::cout << "**Subscribes:** ";
-  print_subscribers<Components, mid>();
-  std::cout << "<br>\n";
+
+  if constexpr (cxx_pub) {
+    std::cout << "**Publishes:** ";
+    if (!print_publishers<Components, mid>()) {
+      std::cout << "_None_";
+    }
+    std::cout << "<br>\n";
+  }
+
+  if constexpr (cxx_sub) {
+    std::cout << "**Subscribes:** ";
+    if (!print_subscribers<Components, mid>()) {
+      std::cout << "_None_";
+    }
+    std::cout << "<br>\n";
+  }
+
   std::cout << "**Wire size:** " << sizeof(Payload) << " bytes\n\n";
 
   std::set<std::string> visited;
@@ -473,8 +480,52 @@ void emit_md_payload_section_for_msg_id() {
 // Mermaid message-flow diagram
 // -------------------------------------------------------------------------------------------------
 
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+void mermaid_inbound_edges_impl(std::index_sequence<Is...>, std::string_view mname) {
+  bool first = true;
+  (..., [&]() {
+    using Comp = std::tuple_element_t<Is, Tuple>;
+    if constexpr (component_subscribes<Comp, Id>()) {
+      std::string cname = cpp_type_name_str<Comp>();
+      if (cname != "UdpBridge") {
+        if (!first) {
+          std::cout << "\n        UdpBridge -->|" << mname << "| ";
+        }
+        std::cout << cname << "\n";
+        first = false;
+      }
+    }
+  }());
+}
+
+template <typename Tuple, ipc::MsgId Id>
+void mermaid_inbound_edges(std::string_view mname) {
+  mermaid_inbound_edges_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
+                                        mname);
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+void mermaid_outbound_edges_impl(std::index_sequence<Is...>, std::string_view mname) {
+  (..., [&]() {
+    using Comp = std::tuple_element_t<Is, Tuple>;
+    if constexpr (component_publishes<Comp, Id>()) {
+      std::string cname = cpp_type_name_str<Comp>();
+      if (cname != "UdpBridge") {
+        std::cout << "        " << cname << " -->|" << mname << "| UdpBridge\n";
+      }
+    }
+  }());
+}
+
+template <typename Tuple, ipc::MsgId Id>
+void mermaid_outbound_edges(std::string_view mname) {
+  mermaid_outbound_edges_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
+                                         mname);
+}
+
 template <typename Components, uint32_t Id>
-void emit_mermaid_edge_for_msg_id() {
+void emit_mermaid_edge_for_msg_id(std::string& inbound, std::string& outbound, bool& first_in,
+                                  bool& first_out) {
   using T = typename doc_payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
     constexpr auto mid = static_cast<ipc::MsgId>(Id);
@@ -486,11 +537,27 @@ void emit_mermaid_edge_for_msg_id() {
     constexpr bool py_pub = py_publishes<Components, mid>();
 
     if (py_pub && cxx_sub && !cxx_pub && !py_sub) {
-      std::cout << "    PY -->|" << mname << "| CXX\n";
+      if (!first_in) inbound += "<br/>";
+      inbound += mname;
+      first_in = false;
+      std::cout << "        UdpBridge -->|" << mname << "| ";
+      mermaid_inbound_edges<Components, mid>(mname);
     } else if (cxx_pub && py_sub && !py_pub && !cxx_sub) {
-      std::cout << "    CXX -->|" << mname << "| PY\n";
+      if (!first_out) outbound += "<br/>";
+      outbound += mname;
+      first_out = false;
+      mermaid_outbound_edges<Components, mid>(mname);
     } else if ((py_pub || py_sub) && (cxx_pub || cxx_sub)) {
-      std::cout << "    PY <-->|" << mname << "| CXX\n";
+      if (!first_in) inbound += "<br/>";
+      inbound += mname;
+      first_in = false;
+      std::cout << "        UdpBridge -->|" << mname << "| ";
+      mermaid_inbound_edges<Components, mid>(mname);
+
+      if (!first_out) outbound += "<br/>";
+      outbound += mname;
+      first_out = false;
+      mermaid_outbound_edges<Components, mid>(mname);
     }
   }
 }
@@ -500,16 +567,98 @@ void emit_mermaid_flow() {
   constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
 
   std::cout << "```mermaid\nflowchart LR\n";
-  std::cout << "    PY([\"Python / pytest\"])\n";
-  std::cout << "    CXX([\"C++ SIL\"])\n";
+  std::cout << "    %% ─── COLUMN 1: Pytest Test Harness ───\n";
+  std::cout << "    subgraph py[\"Pytest SIL Environment\"]\n";
+  std::cout << "        TestCase([\"Test Case / Fixtures\"])\n";
+  std::cout << "    end\n\n";
+
+  std::cout << "    %% ─── COLUMN 2: Python UDP Client & Kernel Routing ───\n";
+  std::cout << "    subgraph net[\"UdpClient (127.0.0.1)\"]\n";
+  std::cout << "        direction TB\n";
+  std::cout << "        TX([\"TX Socket<br/>Port 9000<br/>==============<br/>(sendto)\"])\n";
+  std::cout << "        RX([\"RX Socket<br/>Port 9001<br/>==============<br/>(recvfrom)\"])\n";
+  std::cout << "    end\n\n";
+
+  std::cout << "    %% ─── COLUMN 3: C++ SUT ───\n";
+  std::cout << "    subgraph sim[\"Simulator\"]\n";
 
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-    (..., [] {
+    (..., [&] {
+      using Comp = std::tuple_element_t<Is, Components>;
+      constexpr auto R = ^^Comp;
+      std::string cname = cpp_type_name_str<Comp>();
+
+      std::cout << "        " << cname << "([\"" << cname;
+      constexpr auto desc = get_desc<R>();
+      if (desc.text[0] != '\0') {
+        std::cout << "<br/><br/>";
+        std::string desc_str{desc.text};
+
+        // Find the first period to extract just the first sentence
+        size_t dot_pos = desc_str.find('.');
+        if (dot_pos != std::string::npos) {
+          desc_str = desc_str.substr(0, dot_pos + 1);
+        }
+
+        // Word wrap using <br/> tags
+        std::string wrapped = "";
+        size_t current_line_len = 0;
+        size_t last_space = 0;
+
+        for (size_t i = 0; i < desc_str.length(); ++i) {
+          if (desc_str[i] == ' ') {
+            last_space = i;
+          }
+          wrapped += desc_str[i];
+          current_line_len++;
+
+          if (current_line_len > 35 && last_space != 0) {
+            // Replace the last space with <br/>
+            wrapped.replace(wrapped.length() - 1 - (i - last_space), 1, "<br/>");
+            current_line_len = i - last_space;
+            last_space = 0;
+          }
+        }
+        std::cout << wrapped;
+      }
+      std::cout << "\"])\n";
+    }());
+  }(std::make_index_sequence<std::tuple_size_v<Components>>{});
+
+  std::cout << "\n        %% Pure Internal Messages\n";
+  // Hardcoded for now based on the architecture, in a real system this could use further reflection
+  std::cout << "        MotorService -.->|PhysicsTick,<br/>StateChange| KinematicsService\n";
+  std::cout << "        MotorService -.->|PhysicsTick,<br/>StateChange| PowerService\n";
+  std::cout << "        MotorService -.->|StateChange| StateService\n";
+  std::cout << "        MotorService -.->|PhysicsTick,<br/>StateChange| LogService\n\n";
+  std::cout << "        %% Bridge Distribution\n";
+
+  std::string inbound_msgs = "";
+  std::string outbound_msgs = "";
+  bool first_in = true;
+  bool first_out = true;
+
+  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    (..., [](std::string& in_msgs, std::string& out_msgs, bool& f_in, bool& f_out) {
       constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      emit_mermaid_edge_for_msg_id<Components, val>();
-    }());
+      emit_mermaid_edge_for_msg_id<Components, val>(in_msgs, out_msgs, f_in, f_out);
+    }(inbound_msgs, outbound_msgs, first_in, first_out));
   }(std::make_index_sequence<num_msgs>{});
+
+  std::cout << "    end\n\n";
+
+  std::cout << "    %% ─── INBOUND PATH ───\n";
+  std::cout << "    TestCase -->|send_msg| TX\n";
+  if (!inbound_msgs.empty()) {
+    std::cout << "    TX -->|\"" << inbound_msgs << "\"| UdpBridge\n\n";
+  }
+
+  std::cout << "    %% ─── OUTBOUND PATH ───\n";
+  if (!outbound_msgs.empty()) {
+    std::cout << "    UdpBridge -->|\"" << outbound_msgs << "\"| RX\n";
+  }
+  std::cout << "    RX -->|recv_msg| TestCase\n";
 
   std::cout << "```\n\n";
 }

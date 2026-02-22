@@ -15,13 +15,13 @@ flowchart TD
         direction TB
         
         subgraph modules["Feature Modules"]
-            PUB["Publisher\n(E.g., Motor Controller)"]
-            SUB["Subscriber\n(E.g., Safety Monitor)"]
+            PUB["Publisher<br/>(E.g., Motor Controller)"]
+            SUB["Subscriber<br/>(E.g., Safety Monitor)"]
         end
 
         subgraph ipc["IPC Layer"]
-            BUS[["MessageBus\n(AF_UNIX pub/sub)"]]
-            BRIDGE["UdpBridge\n(subscribes to all & forwards to UDP;\ninjects UDP telemetry into bus)"]
+            BUS[["MessageBus<br/>(AF_UNIX pub/sub)"]]
+            BRIDGE["UdpBridge<br/>(subscribes to all & forwards to UDP;<br/>injects UDP telemetry into bus)"]
         end
 
         PUB -- "publish<MotorCmd> (AF_UNIX)" --> BUS
@@ -31,13 +31,13 @@ flowchart TD
 
     subgraph py["Python SIL Suite (pytest)"]
         direction TB
-        TEST["Test Cases\n(Behavior assertions)"]
-        CLIENT["UdpClient\n(via auto-generated _reflect pybind11)"]
+        TEST["Test Cases<br/>(Behavior assertions)"]
+        CLIENT["UdpClient<br/>(via auto-generated _reflect pybind11)"]
         
         TEST -- "send/recv structured payload" <--> CLIENT
     end
 
-    BRIDGE <-->|"UDP :9000\n(host byte-order wire format)"| CLIENT
+    BRIDGE <-->|"UDP :9000<br/>(host byte-order wire format)"| CLIENT
 
     classDef proc fill:#f9f9f9,stroke:#333,stroke-width:2px;
     class cpp,py proc;
