@@ -2,7 +2,7 @@
 // and emits a GitHub-renderable Markdown documentation file.
 //
 // Build:  cmake --build build --target generate_docs
-// Run:    ./build/generate_docs > build/doc/ipc_protocol.md
+// Run:    ./build/generate_docs > build/doc/README.md
 //         (CMake custom command does this automatically)
 
 #include "app_components.h"
@@ -131,7 +131,7 @@ This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module 
 # From the repo root:
 cmake -B build -G Ninja
 cmake --build build --target generate_docs
-# Output: build/doc/ipc_protocol.md
+# Output: build/doc/README.md
 ```
 
 _Generated with GCC trunk `-std=c++26 -freflection` (P2996R13 + P3394R4)._

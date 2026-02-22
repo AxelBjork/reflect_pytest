@@ -14,8 +14,14 @@ class MsgId(IntEnum):
     KinematicsData = 5
     PowerRequest = 6
     PowerData = 7
-    PhysicsTick = 8
-    StateChange = 9
+    ThermalRequest = 8
+    ThermalData = 9
+    EnvironmentCommand = 10
+    EnvironmentRequest = 11
+    EnvironmentData = 12
+    PhysicsTick = 13
+    StateChange = 14
+    ResetRequest = 15
 
 class Severity(IntEnum):
     """Severity level attached to every LogPayload message."""
@@ -23,19 +29,6 @@ class Severity(IntEnum):
     Info = 1
     Warn = 2
     Error = 3
-
-class ComponentId(IntEnum):
-    """Identifies the subsystem that emitted a LogPayload."""
-    Main = 0
-    Bus = 1
-    Logger = 2
-    Bridge = 3
-    Test = 4
-    Simulator = 5
-    Motor = 6
-    Kinematics = 7
-    Power = 8
-    State = 9
 
 class SystemState(IntEnum):
     """Coarse lifecycle state of the SIL simulator."""
@@ -67,18 +60,18 @@ class LogPayload:
     """Unidirectional log/trace message. Emitted by any component at any time; Python receives these passively from the bus."""
     text: bytes
     severity: Severity
-    component: ComponentId
+    component: bytes
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<255sBB", self.text, self.severity, self.component))
+        data.extend(struct.pack("<255sB32s", self.text, self.severity, self.component))
         return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "LogPayload":
         offset = 0
-        text, severity, component = struct.unpack_from("<255sBB", data, offset)
-        offset += struct.calcsize("<255sBB")
+        text, severity, component = struct.unpack_from("<255sB32s", data, offset)
+        offset += struct.calcsize("<255sB32s")
         return cls(text=text, severity=severity, component=component)
 
 @dataclass
@@ -224,6 +217,96 @@ class PowerPayload:
         return cls(cmd_id=cmd_id, voltage_v=voltage_v, current_a=current_a, state_of_charge=state_of_charge)
 
 @dataclass
+class ThermalRequestPayload:
+    """One-byte sentinel. Send to request a ThermalData snapshot. The payload value is ignored."""
+    reserved: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "ThermalRequestPayload":
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
+
+@dataclass
+class ThermalPayload:
+    """Thermal snapshot sent in response to a ThermalRequest. Models temperature of motor and battery based on power metrics."""
+    motor_temp_c: float
+    battery_temp_c: float
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<ff", self.motor_temp_c, self.battery_temp_c))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "ThermalPayload":
+        offset = 0
+        motor_temp_c, battery_temp_c = struct.unpack_from("<ff", data, offset)
+        offset += struct.calcsize("<ff")
+        return cls(motor_temp_c=motor_temp_c, battery_temp_c=battery_temp_c)
+
+@dataclass
+class EnvironmentCommandPayload:
+    """Environment factors sent from Python to override simulation ambient conditions."""
+    ambient_temp_c: float
+    incline_percent: float
+    surface_friction: float
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<fff", self.ambient_temp_c, self.incline_percent, self.surface_friction))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "EnvironmentCommandPayload":
+        offset = 0
+        ambient_temp_c, incline_percent, surface_friction = struct.unpack_from("<fff", data, offset)
+        offset += struct.calcsize("<fff")
+        return cls(ambient_temp_c=ambient_temp_c, incline_percent=incline_percent, surface_friction=surface_friction)
+
+@dataclass
+class EnvironmentRequestPayload:
+    """One-byte sentinel. Send to request an EnvironmentData snapshot. The payload value is ignored."""
+    reserved: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "EnvironmentRequestPayload":
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
+
+@dataclass
+class EnvironmentPayload:
+    """Active environment conditions applied to the simulation."""
+    ambient_temp_c: float
+    incline_percent: float
+    surface_friction: float
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<fff", self.ambient_temp_c, self.incline_percent, self.surface_friction))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "EnvironmentPayload":
+        offset = 0
+        ambient_temp_c, incline_percent, surface_friction = struct.unpack_from("<fff", data, offset)
+        offset += struct.calcsize("<fff")
+        return cls(ambient_temp_c=ambient_temp_c, incline_percent=incline_percent, surface_friction=surface_friction)
+
+@dataclass
 class PhysicsTickPayload:
     """Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration."""
     cmd_id: int
@@ -260,6 +343,23 @@ class StateChangePayload:
         offset += struct.calcsize("<BI")
         return cls(state=state, cmd_id=cmd_id)
 
+@dataclass
+class ResetRequestPayload:
+    """One-byte sentinel. Send to request a full physics reset."""
+    reserved: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "ResetRequestPayload":
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
+
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
     MsgId.StateRequest: StateRequestPayload,
@@ -269,12 +369,18 @@ MESSAGE_BY_ID = {
     MsgId.KinematicsData: KinematicsPayload,
     MsgId.PowerRequest: PowerRequestPayload,
     MsgId.PowerData: PowerPayload,
+    MsgId.ThermalRequest: ThermalRequestPayload,
+    MsgId.ThermalData: ThermalPayload,
+    MsgId.EnvironmentCommand: EnvironmentCommandPayload,
+    MsgId.EnvironmentRequest: EnvironmentRequestPayload,
+    MsgId.EnvironmentData: EnvironmentPayload,
     MsgId.PhysicsTick: PhysicsTickPayload,
     MsgId.StateChange: StateChangePayload,
+    MsgId.ResetRequest: ResetRequestPayload,
 }
 
 PAYLOAD_SIZE_BY_ID = {
-    MsgId.Log: 257,
+    MsgId.Log: 288,
     MsgId.StateRequest: 1,
     MsgId.StateData: 1,
     MsgId.MotorSequence: 35,
@@ -282,7 +388,13 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.KinematicsData: 16,
     MsgId.PowerRequest: 1,
     MsgId.PowerData: 13,
+    MsgId.ThermalRequest: 1,
+    MsgId.ThermalData: 8,
+    MsgId.EnvironmentCommand: 12,
+    MsgId.EnvironmentRequest: 1,
+    MsgId.EnvironmentData: 12,
     MsgId.PhysicsTick: 10,
     MsgId.StateChange: 5,
+    MsgId.ResetRequest: 1,
 }
 

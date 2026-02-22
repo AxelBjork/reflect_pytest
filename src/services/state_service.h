@@ -18,7 +18,7 @@ class DOC_DESC(
   using Subscribes = ipc::MsgList<ipc::MsgId::StateChange, ipc::MsgId::StateRequest>;
   using Publishes = ipc::MsgList<ipc::MsgId::StateData>;
 
-  explicit StateService(ipc::MessageBus& bus) : bus_(bus), logger_(bus, ipc::ComponentId::State) {
+  explicit StateService(ipc::MessageBus& bus) : bus_(bus), logger_("state") {
     ipc::bind_subscriptions(bus_, this);
   }
 

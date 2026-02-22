@@ -4,53 +4,14 @@ A software-in-the-loop (SIL) test framework that uses **C++26 static reflection*
 
 ## Architecture
 
-> [!TIP]
-> To preview the Mermaid diagrams below directly in VS Code, install the **Markdown Preview Mermaid Support** extension (`bierner.markdown-mermaid`). It has been added to `.devcontainer.json` recommendations.
+> [!IMPORTANT]
+> The complete system architecture, wire format, and message flow are detailed in the auto-generated **IPC Protocol Reference**. Since the protocol is auto-generated using C++26 reflection, that document serves as the ground truth.
+> 👉 **[doc/README.md (IPC Protocol Reference)](doc/README.md)**
 
 The current POC implements a single-node Publisher/Subscriber bus backed by an AF_UNIX socket, bridged to a UDP port so `pytest` can interact with it.
 
-```mermaid
-flowchart TD
-    subgraph cpp["C++ Target Application"]
-        direction TB
-        
-        subgraph modules["Feature Modules"]
-            PUB["Publisher<br/>(E.g., Motor Controller)"]
-            SUB["Subscriber<br/>(E.g., Safety Monitor)"]
-        end
-
-        subgraph ipc["IPC Layer"]
-            BUS[["MessageBus<br/>(AF_UNIX pub/sub)"]]
-            BRIDGE["UdpBridge<br/>(subscribes to all & forwards to UDP;<br/>injects UDP telemetry into bus)"]
-        end
-
-        PUB -- "publish<MotorCmd> (AF_UNIX)" --> BUS
-        BUS -- "dispatch (in memory)" --> SUB
-        BUS -- "relay over socket" --> BRIDGE
-    end
-
-    subgraph py["Python SIL Suite (pytest)"]
-        direction TB
-        TEST["Test Cases<br/>(Behavior assertions)"]
-        CLIENT["UdpClient<br/>(via auto-generated _reflect pybind11)"]
-        
-        TEST -- "send/recv structured payload" <--> CLIENT
-    end
-
-    BRIDGE <-->|"UDP :9000<br/>(host byte-order wire format)"| CLIENT
-
-    classDef proc fill:#f9f9f9,stroke:#333,stroke-width:2px;
-    class cpp,py proc;
-```
-
-**Wire format** (identical on AF_UNIX and UDP):
-```
-┌──────────────┬────────────────────────────────┐
-│ msgId: u16   │ payload: sizeof(T) bytes        │
-└──────────────┴────────────────────────────────┘
-```
-
-Payloads are **fixed-size and trivially copyable**. Any packet whose length ≠ `sizeof(T)` is discarded and an error is reported.
+For more details on the software architecture and principles, see [Software Design](doc/agent/design.md).  
+For deep-dives into the C++26 introspection generation pipeline, see [Reflection System Design](doc/agent/reflection.md).
 
 ## How it works
 
@@ -65,10 +26,10 @@ Payloads are **fixed-size and trivially copyable**. Any packet whose length ≠ 
 
 ```bash
 # 1. Build C++ app, run ctest (GTest), then run pytest SIL suite
-pytest tests/python/ --build -v
+pytest tests/python/ --build
 
 # 2. Run the SIL suite only (app must be built)
-pytest tests/python/ -v
+pytest tests/python/
 
 # 3. Stream sil_app output live to your terminal during tests
 pytest tests/python/ -v -s
@@ -91,6 +52,6 @@ In this devcontainer, the compiler is provided by the `gcc-snapshot` package fro
 | Build | CMake + Ninja |
 | IPC | AF_UNIX `SOCK_DGRAM` |
 | Test transport | UDP (single port 9000) |
-| Python bindings | pybind11 (auto-generated) |
+| Python bindings | C++26 reflection (auto-generated) |
 | C++ unit tests | GoogleTest |
 | SIL test runner | pytest + pytest-cov + pytest-xdist |

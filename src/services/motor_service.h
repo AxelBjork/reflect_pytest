@@ -28,7 +28,7 @@ class DOC_DESC(
   void on_message(const ipc::MotorSequencePayload& cmd);
 
  private:
-  ipc::MessageBus& bus_;
+  ipc::TypedPublisher<MotorService> bus_;
   ComponentLogger logger_;
   std::mutex mu_;
   std::condition_variable cv_;

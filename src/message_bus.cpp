@@ -30,11 +30,6 @@ void MessageBus::subscribe(MsgId id, Handler h) {
   per_id_subs_[static_cast<uint16_t>(id)].push_back(std::move(h));
 }
 
-void MessageBus::subscribe_all(Handler h) {
-  std::lock_guard lk(mu_);
-  wildcard_subs_.push_back(std::move(h));
-}
-
 void MessageBus::listener_loop() {
   const int srv = server_.fd();
   const int pip = wake_[0];
@@ -65,7 +60,6 @@ void MessageBus::dispatch(RawMessage msg) {
     std::lock_guard lk(mu_);
     auto it = per_id_subs_.find(static_cast<uint16_t>(msg.msgId));
     if (it != per_id_subs_.end()) handlers = it->second;
-    for (const auto& h : wildcard_subs_) handlers.push_back(h);
   }
   for (auto& h : handlers) h(msg);
 }

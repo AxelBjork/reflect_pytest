@@ -1,12 +1,15 @@
 #pragma once
 
 #include <tuple>
+#include <type_traits>
 
+#include "services/environment_service.h"
 #include "services/kinematics_service.h"
 #include "services/log_service.h"
 #include "services/motor_service.h"
 #include "services/power_service.h"
 #include "services/state_service.h"
+#include "services/thermal_service.h"
 #include "udp_bridge.h"
 
 namespace sil {
@@ -15,7 +18,7 @@ namespace sil {
 // This is used by the documentation generator to automatically reflect over
 // the aggregate Subscribes/Publishes traits of the entire application.
 using AppServices = std::tuple<MotorService, KinematicsService, PowerService, StateService,
-                               LogService, ipc::UdpBridge>;
+                               ThermalService, EnvironmentService, LogService, ipc::UdpBridge>;
 
 template <typename... Ts>
 struct AppServicesContainer {

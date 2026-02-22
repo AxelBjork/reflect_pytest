@@ -53,18 +53,24 @@ namespace ipc {
 
 enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is the "
                     "first two bytes of every UDP datagram.") MsgId : uint16_t {
-  Log,                // unidirectional log/trace from any component
-  StateRequest,       // Python -> C++: query simulator state (1-byte request)
-  StateData,          // C++ -> Python: simulator state snapshot
-  MotorSequence,      // Python -> C++: execute a timed command sequence
-  KinematicsRequest,  // Python -> C++: query position/speed (1-byte request)
-  KinematicsData,     // C++ -> Python: kinematics snapshot response
-  PowerRequest,       // Python -> C++: query power state (1-byte request)
-  PowerData,          // C++ -> Python: power snapshot response
+  Log,                 // unidirectional log/trace from any component
+  StateRequest,        // Python -> C++: query simulator state (1-byte request)
+  StateData,           // C++ -> Python: simulator state snapshot
+  MotorSequence,       // Python -> C++: execute a timed command sequence
+  KinematicsRequest,   // Python -> C++: query position/speed (1-byte request)
+  KinematicsData,      // C++ -> Python: kinematics snapshot response
+  PowerRequest,        // Python -> C++: query power state (1-byte request)
+  PowerData,           // C++ -> Python: power snapshot response
+  ThermalRequest,      // Python -> C++: query thermal state (1-byte request)
+  ThermalData,         // C++ -> Python: thermal snapshot response
+  EnvironmentCommand,  // Python -> C++: set external environmental conditions
+  EnvironmentRequest,  // Python -> C++: query active environment state (1-byte request)
+  EnvironmentData,     // C++ -> Python: environment snapshot response
 
   // -- Internal Component IPC --
-  PhysicsTick,  // Motor -> Others: 100Hz tick with RPM and dt_us
-  StateChange,  // Motor -> Others: SystemState transition
+  PhysicsTick,   // Motor -> Others: 100Hz tick with RPM and dt_us
+  StateChange,   // Motor -> Others: SystemState transition
+  ResetRequest,  // Python -> C++: Reset all physics state
 };
 
 // ── Supporting enums ─────────────────────────────────────────────────────────
@@ -74,19 +80,6 @@ enum class DOC_DESC("Severity level attached to every LogPayload message.") Seve
   Info,
   Warn,
   Error
-};
-
-enum class DOC_DESC("Identifies the subsystem that emitted a LogPayload.") ComponentId : uint8_t {
-  Main,
-  Bus,
-  Logger,
-  Bridge,
-  Test,
-  Simulator,
-  Motor,
-  Kinematics,
-  Power,
-  State
 };
 
 enum class DOC_DESC("Coarse lifecycle state of the SIL simulator.") SystemState : uint8_t {
@@ -125,10 +118,14 @@ struct DOC_DESC("Unidirectional log/trace message. Emitted by any component at a
                 "Python receives these passively from the bus.") LogPayload {
   char text[255];
   Severity severity;
-  ComponentId component;
+  char component[32];
 };
 
 // 1-byte sentinel requests (trigger a C++ → UDP response on the paired MsgId).
+struct DOC_DESC("One-byte sentinel. Send to request a full physics reset.") ResetRequestPayload {
+  uint8_t reserved;
+};
+
 struct DOC_DESC(
     "One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored.")
     StateRequestPayload {
@@ -151,6 +148,18 @@ struct DOC_DESC(
   uint8_t reserved;
 };
 
+struct DOC_DESC(
+    "One-byte sentinel. Send to request a ThermalData snapshot. The payload value is ignored.")
+    ThermalRequestPayload {
+  uint8_t reserved;
+};
+
+struct DOC_DESC(
+    "One-byte sentinel. Send to request an EnvironmentData snapshot. The payload value is ignored.")
+    EnvironmentRequestPayload {
+  uint8_t reserved;
+};
+
 // Kinematics snapshot — position integrated from sequence start.
 struct DOC_DESC("Kinematics snapshot sent in response to a KinematicsRequest. "
                 "Reflects physics state integrated since the start of the current sequence.")
@@ -168,6 +177,28 @@ struct DOC_DESC("Power-model snapshot sent in response to a PowerRequest. "
   float voltage_v;
   float current_a;
   uint8_t state_of_charge;
+};
+
+// Thermal model snapshot.
+struct DOC_DESC("Thermal snapshot sent in response to a ThermalRequest. "
+                "Models temperature of motor and battery based on power metrics.") ThermalPayload {
+  float motor_temp_c;
+  float battery_temp_c;
+};
+
+// Environment command.
+struct DOC_DESC("Environment factors sent from Python to override simulation ambient conditions.")
+    EnvironmentCommandPayload {
+  float ambient_temp_c;
+  float incline_percent;
+  float surface_friction;
+};
+
+// Environment snapshot.
+struct DOC_DESC("Active environment conditions applied to the simulation.") EnvironmentPayload {
+  float ambient_temp_c;
+  float incline_percent;
+  float surface_friction;
 };
 
 // ── Internal Component IPC ───────────────────────────────────────────────────

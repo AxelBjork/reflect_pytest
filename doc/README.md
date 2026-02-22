@@ -60,7 +60,9 @@ flowchart LR
         KinematicsService(["KinematicsService<br/><br/>Simulates vehicle motion by<br/>integrating motor RPM over time to<br/>track position and linear velocity."])
         PowerService(["PowerService<br/><br/>Models a simple battery pack<br/>dynamically responding to motor<br/>load."])
         StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine of the simulation."])
-        LogService(["LogService<br/><br/>Periodically aggregates system<br/>state into human-readable text logs<br/>for debugging."])
+        ThermalService(["ThermalService<br/><br/>Thermal Service"])
+        EnvironmentService(["EnvironmentService<br/><br/>Environment Service"])
+        LogService(["LogService<br/><br/>Asynchronous logging sink."])
         UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
         %% Bridge Distribution
         LogService -->|Log| UdpBridge
@@ -71,21 +73,31 @@ flowchart LR
         KinematicsService -->|KinematicsData| UdpBridge
         UdpBridge -->|PowerRequest| PowerService
         PowerService -->|PowerData| UdpBridge
+        UdpBridge -->|ThermalRequest| ThermalService
+        ThermalService -->|ThermalData| UdpBridge
+        UdpBridge -->|EnvironmentCommand| EnvironmentService
+        UdpBridge -->|EnvironmentRequest| EnvironmentService
+        UdpBridge -->|EnvironmentData| ThermalService
+        EnvironmentService -->|EnvironmentData| UdpBridge
         MotorService -.->|PhysicsTick| KinematicsService
         MotorService -.->|PhysicsTick| PowerService
-        MotorService -.->|PhysicsTick| LogService
+        MotorService -.->|PhysicsTick| ThermalService
         MotorService -.->|StateChange| KinematicsService
         MotorService -.->|StateChange| PowerService
         MotorService -.->|StateChange| StateService
-        MotorService -.->|StateChange| LogService
+        UdpBridge -->|ResetRequest| KinematicsService
+
+        UdpBridge -->|ResetRequest| PowerService
+
+        UdpBridge -->|ResetRequest| ThermalService
     end
 
     %% ─── INBOUND PATH ───
     TestCase -->|send_msg| TX
-    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest"| UdpBridge
+    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest<br/>ThermalRequest<br/>EnvironmentCommand<br/>EnvironmentRequest<br/>EnvironmentData<br/>ResetRequest"| UdpBridge
 
     %% ─── OUTBOUND PATH ───
-    UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData"| RX
+    UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData<br/>ThermalData<br/>EnvironmentData"| RX
     RX -->|recv_msg| TestCase
 ```
 
@@ -129,11 +141,19 @@ $$ SOC = \frac{V - V_{min}}{V_{max} - V_{min}} \times 100 $$
 
 This component passively tracks the top-level simulated system state (Init, Ready, Executing, Fault) by listening to internal state transitions and makes it available to external clients via ping requests.
 
+### `ThermalService`
+
+> Thermal Service
+
+### `EnvironmentService`
+
+> Environment Service
+
 ### `LogService`
 
-> Periodically aggregates system state into human-readable text logs for debugging.
+> Asynchronous logging sink.
 
-It acts as an internal observer, keeping track of the latest kinematics, power, and state metrics, and broadcasts a formatted string representation at a fixed interval to track the simulation's progress.
+Collects LogPayloads into a queue and processes them on a background thread to avoid blocking simulation services.
 
 ### `UdpBridge`
 
@@ -153,8 +173,14 @@ It remembers the IP address and port of the last connected test harness and bidi
 - [`KinematicsData`](#msgidkinematicsdata-kinematicspayload)
 - [`PowerRequest`](#msgidpowerrequest-powerrequestpayload)
 - [`PowerData`](#msgidpowerdata-powerpayload)
+- [`ThermalRequest`](#msgidthermalrequest-thermalrequestpayload)
+- [`ThermalData`](#msgidthermaldata-thermalpayload)
+- [`EnvironmentCommand`](#msgidenvironmentcommand-environmentcommandpayload)
+- [`EnvironmentRequest`](#msgidenvironmentrequest-environmentrequestpayload)
+- [`EnvironmentData`](#msgidenvironmentdata-environmentpayload)
 - [`PhysicsTick`](#msgidphysicstick-physicstickpayload)
 - [`StateChange`](#msgidstatechange-statechangepayload)
+- [`ResetRequest`](#msgidresetrequest-resetrequestpayload)
 
 Each section corresponds to one `MsgId` enumerator. The **direction badge** shows which side initiates the message.
 
@@ -164,7 +190,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Outbound`<br>
 **Publishes:** `LogService`<br>
-**Wire size:** 257 bytes
+**Wire size:** 288 bytes
 
 <table>
   <thead>
@@ -187,9 +213,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
     </tr>
     <tr>
       <td>component</td>
-      <td>ComponentId</td>
-      <td>ComponentId</td>
-      <td>1</td>
+      <td>char[32]</td>
+      <td>bytes</td>
+      <td>32</td>
       <td>256</td>
     </tr>
   </tbody>
@@ -459,13 +485,164 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+### `MsgId::ThermalRequest` (`ThermalRequestPayload`)
+
+> One-byte sentinel. Send to request a ThermalData snapshot. The payload value is ignored.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `ThermalService`<br>
+**Wire size:** 1 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>reserved</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::ThermalData` (`ThermalPayload`)
+
+> Thermal snapshot sent in response to a ThermalRequest. Models temperature of motor and battery based on power metrics.
+
+**Direction:** `Outbound`<br>
+**Publishes:** `ThermalService`<br>
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>motor_temp_c</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>battery_temp_c</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::EnvironmentCommand` (`EnvironmentCommandPayload`)
+
+> Environment factors sent from Python to override simulation ambient conditions.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `EnvironmentService`<br>
+**Wire size:** 12 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ambient_temp_c</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>incline_percent</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>surface_friction</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>8</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::EnvironmentRequest` (`EnvironmentRequestPayload`)
+
+> One-byte sentinel. Send to request an EnvironmentData snapshot. The payload value is ignored.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `EnvironmentService`<br>
+**Wire size:** 1 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>reserved</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::EnvironmentData` (`EnvironmentPayload`)
+
+> Active environment conditions applied to the simulation.
+
+**Direction:** `Bidirectional`<br>
+**Publishes:** `EnvironmentService`<br>
+**Subscribes:** `ThermalService`<br>
+**Wire size:** 12 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ambient_temp_c</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>incline_percent</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>surface_friction</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>8</td>
+    </tr>
+  </tbody>
+</table>
+
 ### `MsgId::PhysicsTick` (`PhysicsTickPayload`)
 
 > Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration.
 
 **Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `LogService`<br>
+**Subscribes:** `KinematicsService`, `PowerService`, `ThermalService`<br>
 **Wire size:** 10 bytes
 
 <table>
@@ -503,7 +680,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `StateService`, `LogService`<br>
+**Subscribes:** `KinematicsService`, `PowerService`, `StateService`<br>
 **Wire size:** 5 bytes
 
 <table>
@@ -528,6 +705,29 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+### `MsgId::ResetRequest` (`ResetRequestPayload`)
+
+> One-byte sentinel. Send to request a full physics reset.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `KinematicsService`, `PowerService`, `ThermalService`<br>
+**Wire size:** 1 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>reserved</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
 ---
 
 ## Regenerating This File
@@ -536,7 +736,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 # From the repo root:
 cmake -B build -G Ninja
 cmake --build build --target generate_docs
-# Output: build/doc/ipc_protocol.md
+# Output: build/doc/README.md
 ```
 
 _Generated with GCC trunk `-std=c++26 -freflection` (P2996R13 + P3394R4)._

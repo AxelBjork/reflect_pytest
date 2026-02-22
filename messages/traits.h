@@ -55,6 +55,33 @@ struct MessageTraits<MsgId::PowerData> {
 };
 
 template <>
+struct MessageTraits<MsgId::ThermalRequest> {
+  using Payload = ThermalRequestPayload;
+  static constexpr std::string_view name = "ThermalRequest";
+};
+template <>
+struct MessageTraits<MsgId::ThermalData> {
+  using Payload = ThermalPayload;
+  static constexpr std::string_view name = "ThermalData";
+};
+
+template <>
+struct MessageTraits<MsgId::EnvironmentCommand> {
+  using Payload = EnvironmentCommandPayload;
+  static constexpr std::string_view name = "EnvironmentCommand";
+};
+template <>
+struct MessageTraits<MsgId::EnvironmentRequest> {
+  using Payload = EnvironmentRequestPayload;
+  static constexpr std::string_view name = "EnvironmentRequest";
+};
+template <>
+struct MessageTraits<MsgId::EnvironmentData> {
+  using Payload = EnvironmentPayload;
+  static constexpr std::string_view name = "EnvironmentData";
+};
+
+template <>
 struct MessageTraits<MsgId::PhysicsTick> {
   using Payload = PhysicsTickPayload;
   static constexpr std::string_view name = "PhysicsTick";
@@ -64,6 +91,12 @@ template <>
 struct MessageTraits<MsgId::StateChange> {
   using Payload = StateChangePayload;
   static constexpr std::string_view name = "StateChange";
+};
+
+template <>
+struct MessageTraits<MsgId::ResetRequest> {
+  using Payload = ResetRequestPayload;
+  static constexpr std::string_view name = "ResetRequest";
 };
 
 }  // namespace ipc

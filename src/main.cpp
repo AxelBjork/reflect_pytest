@@ -17,9 +17,7 @@
 #include <thread>
 
 #include "app_components.h"
-#include "logger.h"
 #include "message_bus.h"
-#include "udp_bridge.h"
 
 static std::atomic<bool> g_running{true};
 
@@ -37,8 +35,9 @@ int main() {
 
   ipc::MessageBus bus(kSockPath);
 
-  auto logger = sil::create_logger(bus);
+  // create_app_services now owns the LogService
   auto services = sil::create_app_services(bus);
+  auto& log_service = std::get<sil::LogService>(services.services);
 
   std::printf("[sil_app] started (UDP bridge on :%u, bus on %s)\n", kUdpPort, kSockPath);
   std::fflush(stdout);
@@ -59,8 +58,8 @@ int main() {
       ipc::LogPayload p{};
       std::snprintf(p.text, sizeof(p.text), "[heartbeat] TICK %u", ++n);
       p.severity = ipc::Severity::Info;
-      p.component = ipc::ComponentId::Main;
-      bus.publish<ipc::MsgId::Log>(p);
+      std::strncpy(p.component, "main", sizeof(p.component) - 1);
+      log_service.log(p);
     }
   });
 
@@ -70,7 +69,6 @@ int main() {
   hb_cv.notify_all();
   heartbeat.join();
 
-  logger.reset();
   std::printf("[sil_app] shutting down\n");
   return 0;
 }

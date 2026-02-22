@@ -7,9 +7,8 @@ namespace sil {
 
 static constexpr uint32_t kTickUs = 10'000;  // 100Hz
 
-MotorService::MotorService(ipc::MessageBus& bus)
-    : bus_(bus), logger_(bus, ipc::ComponentId::Motor) {
-  ipc::bind_subscriptions(bus_, this);
+MotorService::MotorService(ipc::MessageBus& bus) : bus_(bus), logger_("motor") {
+  ipc::bind_subscriptions(bus, this);
   exec_thread_ = std::thread([this] { exec_loop(); });
 }
 

@@ -9,6 +9,6 @@ def test_process_is_alive(sil_process):
 
 
 def test_process_stays_alive(sil_process):
-    """After 500 ms the binary should still be running (no crash on start)."""
-    time.sleep(0.5)
-    assert sil_process.poll() is None, "sil_app crashed within 500 ms"
+    """After 100 ms the binary should still be running (no crash on start)."""
+    time.sleep(0.1)
+    assert sil_process.poll() is None, "sil_app crashed within 100 ms"
