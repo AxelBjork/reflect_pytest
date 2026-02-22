@@ -46,12 +46,16 @@ class MotorSubCmd:
     duration_us: int
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<hI", self.speed_rpm, self.duration_us)
+        data = bytearray()
+        data.extend(struct.pack("<hI", self.speed_rpm, self.duration_us))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "MotorSubCmd":
-        unpacked = struct.unpack("<hI", data)
-        return cls(*unpacked)
+        offset = 0
+        speed_rpm, duration_us = struct.unpack_from("<hI", data, offset)
+        offset += struct.calcsize("<hI")
+        return cls(speed_rpm=speed_rpm, duration_us=duration_us)
 
 @dataclass
 class LogPayload:
@@ -61,12 +65,16 @@ class LogPayload:
     component: ComponentId
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<255sBB", self.text, self.severity, self.component)
+        data = bytearray()
+        data.extend(struct.pack("<255sBB", self.text, self.severity, self.component))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "LogPayload":
-        unpacked = struct.unpack("<255sBB", data)
-        return cls(*unpacked)
+        offset = 0
+        text, severity, component = struct.unpack_from("<255sBB", data, offset)
+        offset += struct.calcsize("<255sBB")
+        return cls(text=text, severity=severity, component=component)
 
 @dataclass
 class QueryStatePayload:
@@ -74,27 +82,50 @@ class QueryStatePayload:
     state: SystemState
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<B", self.state)
+        data = bytearray()
+        data.extend(struct.pack("<B", self.state))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "QueryStatePayload":
-        unpacked = struct.unpack("<B", data)
-        return cls(*unpacked)
+        offset = 0
+        state = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(state=state)
 
 @dataclass
-class MotorSequencePayload:
+class MotorSequencePayloadTemplate_10:
     """Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence."""
     cmd_id: int
     num_steps: int
-    steps: bytes
+    steps: list[MotorSubCmd]
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<IB60s", self.cmd_id, self.num_steps, self.steps)
+        data = bytearray()
+        data.extend(struct.pack("<IB", self.cmd_id, self.num_steps))
+        for item in self.steps:
+            if not hasattr(item, 'pack_wire'):
+                if isinstance(item, tuple):
+                    item = MotorSubCmd(*item)
+                elif isinstance(item, dict):
+                    item = MotorSubCmd(**item)
+                else:
+                    item = MotorSubCmd(item)
+            data.extend(item.pack_wire())
+        return bytes(data)
 
     @classmethod
-    def unpack_wire(cls, data: bytes) -> "MotorSequencePayload":
-        unpacked = struct.unpack("<IB60s", data)
-        return cls(*unpacked)
+    def unpack_wire(cls, data: bytes) -> "MotorSequencePayloadTemplate_10":
+        offset = 0
+        cmd_id, num_steps = struct.unpack_from("<IB", data, offset)
+        offset += struct.calcsize("<IB")
+        steps = []
+        for _ in range(10):
+            sub_size = len(MotorSubCmd().pack_wire()) if hasattr(MotorSubCmd, 'pack_wire') else struct.calcsize(MotorSubCmd.SUBCMD_FMT)
+            item = MotorSubCmd.unpack_wire(data[offset:offset+sub_size])
+            steps.append(item)
+            offset += sub_size
+        return cls(cmd_id=cmd_id, num_steps=num_steps, steps=steps)
 
 @dataclass
 class KinematicsRequestPayload:
@@ -102,12 +133,16 @@ class KinematicsRequestPayload:
     reserved: int
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<B", self.reserved)
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "KinematicsRequestPayload":
-        unpacked = struct.unpack("<B", data)
-        return cls(*unpacked)
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
 
 @dataclass
 class KinematicsPayload:
@@ -118,12 +153,16 @@ class KinematicsPayload:
     speed_mps: float
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<IIff", self.cmd_id, self.elapsed_us, self.position_m, self.speed_mps)
+        data = bytearray()
+        data.extend(struct.pack("<IIff", self.cmd_id, self.elapsed_us, self.position_m, self.speed_mps))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "KinematicsPayload":
-        unpacked = struct.unpack("<IIff", data)
-        return cls(*unpacked)
+        offset = 0
+        cmd_id, elapsed_us, position_m, speed_mps = struct.unpack_from("<IIff", data, offset)
+        offset += struct.calcsize("<IIff")
+        return cls(cmd_id=cmd_id, elapsed_us=elapsed_us, position_m=position_m, speed_mps=speed_mps)
 
 @dataclass
 class PowerRequestPayload:
@@ -131,12 +170,16 @@ class PowerRequestPayload:
     reserved: int
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<B", self.reserved)
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "PowerRequestPayload":
-        unpacked = struct.unpack("<B", data)
-        return cls(*unpacked)
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
 
 @dataclass
 class PowerPayload:
@@ -147,12 +190,16 @@ class PowerPayload:
     state_of_charge: int
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<IffB", self.cmd_id, self.voltage_v, self.current_a, self.state_of_charge)
+        data = bytearray()
+        data.extend(struct.pack("<IffB", self.cmd_id, self.voltage_v, self.current_a, self.state_of_charge))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "PowerPayload":
-        unpacked = struct.unpack("<IffB", data)
-        return cls(*unpacked)
+        offset = 0
+        cmd_id, voltage_v, current_a, state_of_charge = struct.unpack_from("<IffB", data, offset)
+        offset += struct.calcsize("<IffB")
+        return cls(cmd_id=cmd_id, voltage_v=voltage_v, current_a=current_a, state_of_charge=state_of_charge)
 
 @dataclass
 class PhysicsTickPayload:
@@ -162,12 +209,16 @@ class PhysicsTickPayload:
     dt_us: int
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<IhI", self.cmd_id, self.speed_rpm, self.dt_us)
+        data = bytearray()
+        data.extend(struct.pack("<IhI", self.cmd_id, self.speed_rpm, self.dt_us))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "PhysicsTickPayload":
-        unpacked = struct.unpack("<IhI", data)
-        return cls(*unpacked)
+        offset = 0
+        cmd_id, speed_rpm, dt_us = struct.unpack_from("<IhI", data, offset)
+        offset += struct.calcsize("<IhI")
+        return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, dt_us=dt_us)
 
 @dataclass
 class StateChangePayload:
@@ -176,17 +227,21 @@ class StateChangePayload:
     cmd_id: int
 
     def pack_wire(self) -> bytes:
-        return struct.pack("<BI", self.state, self.cmd_id)
+        data = bytearray()
+        data.extend(struct.pack("<BI", self.state, self.cmd_id))
+        return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "StateChangePayload":
-        unpacked = struct.unpack("<BI", data)
-        return cls(*unpacked)
+        offset = 0
+        state, cmd_id = struct.unpack_from("<BI", data, offset)
+        offset += struct.calcsize("<BI")
+        return cls(state=state, cmd_id=cmd_id)
 
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
     MsgId.QueryState: QueryStatePayload,
-    MsgId.MotorSequence: MotorSequencePayload,
+    MsgId.MotorSequence: MotorSequencePayloadTemplate_10,
     MsgId.KinematicsRequest: KinematicsRequestPayload,
     MsgId.KinematicsData: KinematicsPayload,
     MsgId.PowerRequest: PowerRequestPayload,

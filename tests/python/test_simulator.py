@@ -17,7 +17,8 @@ from reflect_pytest.generated import (
     MsgId,
     QueryStatePayload,
     SystemState,
-    MotorSequencePayload,
+    MotorSequencePayloadTemplate_10 as MotorSequencePayload,
+    MotorSubCmd,
     KinematicsRequestPayload,
     KinematicsPayload,
     PowerRequestPayload,
@@ -32,26 +33,20 @@ R_INT = 0.5
 V_MAX = 12.6
 V_MIN = 10.5
 
-SUBCMD_FMT = "<hI"
-SUBCMD_SIZE = struct.calcsize(SUBCMD_FMT)  # 6 bytes
 MAX_STEPS = 10
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def pack_steps(steps: list[tuple[int, int]],
-               max_count: int = MAX_STEPS) -> bytes:
-    """Pack list of (speed_rpm, duration_us) into the fixed 60-byte steps blob."""
-    data = b"".join(struct.pack(SUBCMD_FMT, rpm, dur) for rpm, dur in steps)
-    return data.ljust(max_count * SUBCMD_SIZE, b"\x00")
-
-
 def send_sequence(udp: UdpClient, cmd_id: int,
                   steps: list[tuple[int, int]]) -> None:
+    sub_cmds = [MotorSubCmd(speed_rpm=r, duration_us=d) for r, d in steps]
+    for _ in range(MAX_STEPS - len(steps)):
+        sub_cmds.append(MotorSubCmd(speed_rpm=0, duration_us=0))
     payload = MotorSequencePayload(
         cmd_id=cmd_id,
         num_steps=len(steps),
-        steps=pack_steps(steps),
+        steps=sub_cmds,
     )
     udp.send_msg(MsgId.MotorSequence, payload)
 

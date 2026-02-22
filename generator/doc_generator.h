@@ -154,7 +154,6 @@ bool print_publishers() {
   return print_publishers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-
 // -------------------------------------------------------------------------------------------------
 // Human-readable C++ type name
 // Returns a runtime std::string so arrays can be formatted as "ElemType[N]".
@@ -186,9 +185,13 @@ std::string cpp_type_name_str() {
     return "float";
   else if constexpr (std::is_same_v<T, double>)
     return "double";
-  else if constexpr (std::is_enum_v<T> || std::is_class_v<T>)
-    return std::string(std::meta::identifier_of(^^T));
-  else if constexpr (std::is_array_v<T>) {
+  else if constexpr (std::is_enum_v<T> || std::is_class_v<T>) {
+    if constexpr (std::meta::has_identifier(^^T)) {
+      return std::string(std::meta::identifier_of(^^T));
+    } else {
+      return get_cxx_type_name<T>();
+    }
+  } else if constexpr (std::is_array_v<T>) {
     using Elem = std::remove_extent_t<T>;
     constexpr std::size_t n = std::extent_v<T>;
     return cpp_type_name_str<Elem>() + "[" + std::to_string(n) + "]";
@@ -331,7 +334,12 @@ void emit_md_enum_section() {
 template <typename T>
 void emit_md_struct_section(std::set<std::string>& visited) {
   constexpr auto R = ^^T;
-  const std::string name{std::meta::identifier_of(R)};
+  std::string name;
+  if constexpr (std::meta::has_identifier(R)) {
+    name = std::meta::identifier_of(R);
+  } else {
+    name = get_cxx_type_name<T>();
+  }
   if (!visited.insert(name).second) {
     return;
   }
@@ -366,7 +374,12 @@ void emit_md_payload_section() {
   constexpr auto mid = static_cast<ipc::MsgId>(Id);
   constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
   constexpr doc::Desc desc = get_desc<R>();
-  const std::string sname{std::meta::identifier_of(R)};
+  std::string sname;
+  if constexpr (std::meta::has_identifier(R)) {
+    sname = std::meta::identifier_of(R);
+  } else {
+    sname = get_cxx_type_name<Payload>();
+  }
   std::cout << "### `MsgId::" << mname << "` (`" << sname << "`)\n\n";
   if (desc.text[0] != '\0') std::cout << "> " << desc.text << "\n\n";
 
@@ -463,6 +476,40 @@ void mermaid_outbound_edges(std::string_view mname) {
                                          mname);
 }
 
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+void mermaid_internal_edges_impl(std::index_sequence<Is...>, std::string_view mname,
+                                 const std::string& pub_name) {
+  (..., [&]() {
+    using Comp = std::tuple_element_t<Is, Tuple>;
+    if constexpr (component_subscribes<Comp, Id>()) {
+      std::string sub_name = cpp_type_name_str<Comp>();
+      if (sub_name != "UdpBridge") {
+        std::cout << "        " << pub_name << " -.->|" << mname << "| " << sub_name << "\n";
+      }
+    }
+  }());
+}
+
+template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+void mermaid_internal_edges_pub_impl(std::index_sequence<Is...>, std::string_view mname) {
+  (..., [&]() {
+    using Comp = std::tuple_element_t<Is, Tuple>;
+    if constexpr (component_publishes<Comp, Id>()) {
+      std::string pub_name = cpp_type_name_str<Comp>();
+      if (pub_name != "UdpBridge") {
+        mermaid_internal_edges_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
+                                               mname, pub_name);
+      }
+    }
+  }());
+}
+
+template <typename Tuple, ipc::MsgId Id>
+void mermaid_internal_edges(std::string_view mname) {
+  mermaid_internal_edges_pub_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
+                                             mname);
+}
+
 template <typename Components, uint32_t Id>
 void emit_mermaid_edge_for_msg_id(std::string& inbound, std::string& outbound, bool& first_in,
                                   bool& first_out) {
@@ -498,6 +545,8 @@ void emit_mermaid_edge_for_msg_id(std::string& inbound, std::string& outbound, b
       outbound += mname;
       first_out = false;
       mermaid_outbound_edges<Components, mid>(mname);
+    } else if (!py_pub && !py_sub && cxx_pub && cxx_sub) {
+      mermaid_internal_edges<Components, mid>(mname);
     }
   }
 }
@@ -565,12 +614,6 @@ void emit_mermaid_flow() {
     }());
   }(std::make_index_sequence<std::tuple_size_v<Components>>{});
 
-  std::cout << "\n        %% Pure Internal Messages\n";
-  // Hardcoded for now based on the architecture, in a real system this could use further reflection
-  std::cout << "        MotorService -.->|PhysicsTick,<br/>StateChange| KinematicsService\n";
-  std::cout << "        MotorService -.->|PhysicsTick,<br/>StateChange| PowerService\n";
-  std::cout << "        MotorService -.->|StateChange| StateService\n";
-  std::cout << "        MotorService -.->|PhysicsTick,<br/>StateChange| LogService\n\n";
   std::cout << "        %% Bridge Distribution\n";
 
   std::string inbound_msgs = "";

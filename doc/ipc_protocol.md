@@ -63,13 +63,6 @@ flowchart LR
         LogService(["LogService<br/><br/>Periodically aggregates system<br/>state into human-readable text logs<br/>for debugging."])
         UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
         MainPublisher(["MainPublisher"])
-
-        %% Pure Internal Messages
-        MotorService -.->|PhysicsTick,<br/>StateChange| KinematicsService
-        MotorService -.->|PhysicsTick,<br/>StateChange| PowerService
-        MotorService -.->|StateChange| StateService
-        MotorService -.->|PhysicsTick,<br/>StateChange| LogService
-
         %% Bridge Distribution
         LogService -->|Log| UdpBridge
         MainPublisher -->|Log| UdpBridge
@@ -80,6 +73,13 @@ flowchart LR
         KinematicsService -->|KinematicsData| UdpBridge
         UdpBridge -->|PowerRequest| PowerService
         PowerService -->|PowerData| UdpBridge
+        MotorService -.->|PhysicsTick| KinematicsService
+        MotorService -.->|PhysicsTick| PowerService
+        MotorService -.->|PhysicsTick| LogService
+        MotorService -.->|StateChange| KinematicsService
+        MotorService -.->|StateChange| PowerService
+        MotorService -.->|StateChange| StateService
+        MotorService -.->|StateChange| LogService
     end
 
     %% ─── INBOUND PATH ───
@@ -149,7 +149,7 @@ It remembers the IP address and port of the last connected test harness and bidi
 
 - [`Log`](#msgidlog-logpayload)
 - [`QueryState`](#msgidquerystate-querystatepayload)
-- [`MotorSequence`](#msgidmotorsequence-motorsequencepayload)
+- [`MotorSequence`](#msgidmotorsequence-motorsequencepayloadtemplate<10>)
 - [`KinematicsRequest`](#msgidkinematicsrequest-kinematicsrequestpayload)
 - [`KinematicsData`](#msgidkinematicsdata-kinematicspayload)
 - [`PowerRequest`](#msgidpowerrequest-powerrequestpayload)
@@ -220,7 +220,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
-### `MsgId::MotorSequence` (`MotorSequencePayload`)
+### `MsgId::MotorSequence` (`MotorSequencePayloadTemplate<10>`)
 
 > Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence.
 
@@ -249,10 +249,29 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
     </tr>
     <tr>
       <td>steps</td>
+      <td>std::array<MotorSubCmd, 10></td>
+      <td>Any</td>
+      <td>60</td>
+      <td>5</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `std::array<MotorSubCmd, 10>`
+
+**Wire size:** 60 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>_M_elems</td>
       <td>MotorSubCmd[10]</td>
       <td>bytes</td>
       <td>60</td>
-      <td>5</td>
+      <td>0</td>
     </tr>
   </tbody>
 </table>

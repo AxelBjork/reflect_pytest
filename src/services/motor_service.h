@@ -12,8 +12,7 @@ class DOC_DESC(
     "Manages the thread that executes timed motor commands in real-time.\n\n"
     "This service is responsible for stepping through a sequence of motor commands, "
     "emitting standard `PhysicsTick` events at 100Hz, and broadcasting `StateChange` "
-    "events when a sequence starts or finishes.")
-MotorService {
+    "events when a sequence starts or finishes.") MotorService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::MotorSequence>;
   using Publishes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::StateChange>;

@@ -13,15 +13,16 @@ int main() {
   generate_enum<ipc::SystemState>();
 
   // ── Helper structs (not top-level messages) ────────────────────────────────
-  generate_struct<ipc::MotorSubCmd>();
+  std::set<std::string> visited;
+  generate_struct<ipc::MotorSubCmd>(visited);
 
   // ── Message payload structs ────────────────────────────────────────────────
   constexpr std::size_t num_msgs = get_enum_size<ipc::MsgId>();
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-    (..., [] {
+    (..., [&] {
       constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      generate_struct_for_msg_id<val>();
+      generate_struct_for_msg_id<val>(visited);
     }());
   }(std::make_index_sequence<num_msgs>{});
 

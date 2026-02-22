@@ -8,6 +8,7 @@
 //
 // Adding a new message: add MsgId, add Payload struct, add MessageTraits<> in traits.h.
 
+#include <array>
 #include <cstdint>
 
 // doc_annotations.h — Compile-time annotation types for reflection-based
@@ -104,13 +105,16 @@ struct DOC_DESC("One timed motor command step, embedded in MotorSequencePayload.
 // The simulator executes steps[0..num_steps-1] in order, in real time.
 static constexpr uint8_t kMaxSubCmds = 10;
 
+template <std::size_t N>
 struct DOC_DESC("Deliver a sequence of up to 10 timed motor sub-commands to the simulator. "
                 "The simulator executes steps[0..num_steps-1] in real time; a new command "
-                "preempts any currently running sequence.") MotorSequencePayload {
+                "preempts any currently running sequence.") MotorSequencePayloadTemplate {
   uint32_t cmd_id;
   uint8_t num_steps;
-  MotorSubCmd steps[kMaxSubCmds];
+  std::array<MotorSubCmd, N> steps;
 };
+
+using MotorSequencePayload = MotorSequencePayloadTemplate<kMaxSubCmds>;
 
 struct DOC_DESC("Unidirectional log/trace message. Emitted by any component at any time; "
                 "Python receives these passively from the bus.") LogPayload {
