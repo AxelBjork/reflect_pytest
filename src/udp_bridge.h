@@ -24,9 +24,11 @@ class DOC_DESC(
     "datagrams "
     "onto the internal MessageBus.") UdpBridge {
  public:
-  using Subscribes = MsgList<MsgId::Log, MsgId::StateData, MsgId::KinematicsData, MsgId::PowerData>;
+  using Subscribes = MsgList<MsgId::Log, MsgId::StateData, MsgId::KinematicsData, MsgId::PowerData,
+                             MsgId::ThermalData, MsgId::EnvironmentData>;
   using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
-                            MsgId::PowerRequest, MsgId::ResetRequest>;
+                            MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::EnvironmentCommand,
+                            MsgId::EnvironmentRequest, MsgId::ResetRequest>;
 
   static constexpr uint16_t kDefaultPort = 9000;
 
