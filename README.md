@@ -46,7 +46,8 @@ flowchart TD
     class cpp,py proc;
 ```
 
-For more details on the software architecture and principles, see [Software Design](doc/agent/design.md).
+For more details on the software architecture and principles, see [Software Design](doc/agent/design.md).  
+For deep-dives into the C++26 introspection generation pipeline, see [Reflection System Design](doc/agent/reflection.md).
 
 **Wire format** (identical on AF_UNIX and UDP):
 ```
