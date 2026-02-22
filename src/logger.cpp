@@ -41,6 +41,16 @@ static constexpr const char* comp_str(ipc::ComponentId c) {
       return "bridge";
     case ipc::ComponentId::Test:
       return "test";
+    case ipc::ComponentId::Simulator:
+      return "sim";
+    case ipc::ComponentId::Motor:
+      return "motor";
+    case ipc::ComponentId::Kinematics:
+      return "kinematics";
+    case ipc::ComponentId::Power:
+      return "power";
+    case ipc::ComponentId::State:
+      return "state";
   }
   return "?";
 }

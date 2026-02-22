@@ -38,17 +38,55 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 ## Message Flow
 
+This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module to orchestrate test cases, `Network` maps the transport layer across two explicit sockets (`Client -> App` and `App -> Client`), and `Simulator` processes the messages internally.
+
 ```mermaid
 flowchart LR
-    PY(["Python / pytest"])
-    CXX(["C++ SIL"])
-    PY <-->|Log| CXX
-    PY <-->|QueryState| CXX
-    PY <-->|MotorSequence| CXX
-    PY <-->|KinematicsRequest| CXX
-    PY <-->|KinematicsData| CXX
-    PY <-->|PowerRequest| CXX
-    PY <-->|PowerData| CXX
+    %% ─── COLUMN 1: Pytest Test Harness ───
+    subgraph py["Pytest SIL Environment"]
+        TestCase(["Test Case / Fixtures"])
+    end
+
+    %% ─── COLUMN 2: Python UDP Client & Kernel Routing ───
+    subgraph net["UdpClient (127.0.0.1)"]
+        direction TB
+        TX(["TX Socket<br/>Port 9000<br/>==============<br/>(sendto)"])
+        RX(["RX Socket<br/>Port 9001<br/>==============<br/>(recvfrom)"])
+    end
+
+    %% ─── COLUMN 3: C++ SUT ───
+    subgraph sim["Simulator"]
+        MotorService(["MotorService<br/><br/>Manages the thread that executes<br/>timed motor commands in real-time."])
+        KinematicsService(["KinematicsService<br/><br/>Simulates vehicle motion by<br/>integrating motor RPM over time to<br/>track position and linear velocity."])
+        PowerService(["PowerService<br/><br/>Models a simple battery pack<br/>dynamically responding to motor<br/>load."])
+        StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine of the simulation."])
+        LogService(["LogService<br/><br/>Periodically aggregates system<br/>state into human-readable text logs<br/>for debugging."])
+        UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
+        %% Bridge Distribution
+        LogService -->|Log| UdpBridge
+        UdpBridge -->|StateRequest| StateService
+        StateService -->|StateData| UdpBridge
+        UdpBridge -->|MotorSequence| MotorService
+        UdpBridge -->|KinematicsRequest| KinematicsService
+        KinematicsService -->|KinematicsData| UdpBridge
+        UdpBridge -->|PowerRequest| PowerService
+        PowerService -->|PowerData| UdpBridge
+        MotorService -.->|PhysicsTick| KinematicsService
+        MotorService -.->|PhysicsTick| PowerService
+        MotorService -.->|PhysicsTick| LogService
+        MotorService -.->|StateChange| KinematicsService
+        MotorService -.->|StateChange| PowerService
+        MotorService -.->|StateChange| StateService
+        MotorService -.->|StateChange| LogService
+    end
+
+    %% ─── INBOUND PATH ───
+    TestCase -->|send_msg| TX
+    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest"| UdpBridge
+
+    %% ─── OUTBOUND PATH ───
+    UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData"| RX
+    RX -->|recv_msg| TestCase
 ```
 
 ---
@@ -57,13 +95,60 @@ flowchart LR
 
 The application is composed of the following services:
 
+### `MotorService`
+
+> Manages the thread that executes timed motor commands in real-time.
+
+This service is responsible for stepping through a sequence of motor commands, emitting standard `PhysicsTick` events at 100Hz, and broadcasting `StateChange` events when a sequence starts or finishes.
+
+### `KinematicsService`
+
+> Simulates vehicle motion by integrating motor RPM over time to track position and linear velocity.
+
+The physics model applies a linear conversion from RPM to meters-per-second, and integrates this velocity over the `PhysicsTick` delta-time to continuously evaluate the vehicle's position:
+
+$$ v = \text{RPM} \times 0.01 \text{ (m/s)} $$
+
+$$ x = \int v \, dt $$
+
+### `PowerService`
+
+> Models a simple battery pack dynamically responding to motor load.
+
+The simulation calculates the current drawn by the motor based on its speed, then applies Ohm's law over the internal resistance to calculate the instantaneous voltage drop. The state of charge (SOC) is linearly interpolated between the maximum and minimum voltage limits:
+
+$$ I = |\text{RPM}| \times 0.005 \text{ (A)} $$
+
+$$ V \mathrel{-}= I \times R_{int} \times dt $$
+
+$$ SOC = \frac{V - V_{min}}{V_{max} - V_{min}} \times 100 $$
+
+### `StateService`
+
+> Maintains the central lifecycle state machine of the simulation.
+
+This component passively tracks the top-level simulated system state (Init, Ready, Executing, Fault) by listening to internal state transitions and makes it available to external clients via ping requests.
+
+### `LogService`
+
+> Periodically aggregates system state into human-readable text logs for debugging.
+
+It acts as an internal observer, keeping track of the latest kinematics, power, and state metrics, and broadcasts a formatted string representation at a fixed interval to track the simulation's progress.
+
+### `UdpBridge`
+
+> Stateful bridge that relays IPC messages between the internal MessageBus and external UDP clients.
+
+It remembers the IP address and port of the last connected test harness and bidirectionally routes all subscribed C++ events out through the UDP socket while safely injecting incoming UDP datagrams onto the internal MessageBus.
+
 ---
 
 ## Message Payloads
 
 - [`Log`](#msgidlog-logpayload)
-- [`QueryState`](#msgidquerystate-querystatepayload)
-- [`MotorSequence`](#msgidmotorsequence-motorsequencepayload)
+- [`StateRequest`](#msgidstaterequest-staterequestpayload)
+- [`StateData`](#msgidstatedata-statepayload)
+- [`MotorSequence`](#msgidmotorsequence-motorsequencepayloadtemplate<5>)
 - [`KinematicsRequest`](#msgidkinematicsrequest-kinematicsrequestpayload)
 - [`KinematicsData`](#msgidkinematicsdata-kinematicspayload)
 - [`PowerRequest`](#msgidpowerrequest-powerrequestpayload)
@@ -75,9 +160,10 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 ### `MsgId::Log` (`LogPayload`)
 
-**Direction:** `Bidirectional`<br>
-**Publishes:** `LogService`, `MainPublisher`<br>
-**Subscribes:** `UdpBridge`<br>
+> Unidirectional log/trace message. Emitted by any component at any time; Python receives these passively from the bus.
+
+**Direction:** `Outbound`<br>
+**Publishes:** `LogService`<br>
 **Wire size:** 257 bytes
 
 <table>
@@ -109,11 +195,35 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
-### `MsgId::QueryState` (`QueryStatePayload`)
+### `MsgId::StateRequest` (`StateRequestPayload`)
 
-**Direction:** `Bidirectional`<br>
-**Publishes:** `StateService`, `UdpBridge`<br>
-**Subscribes:** `StateService`, `UdpBridge`<br>
+> One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `StateService`<br>
+**Wire size:** 1 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>reserved</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::StateData` (`StatePayload`)
+
+> State machine snapshot sent in response to a StateRequest. Carries the current coarse lifecycle SystemState.
+
+**Direction:** `Outbound`<br>
+**Publishes:** `StateService`<br>
 **Wire size:** 1 bytes
 
 <table>
@@ -131,12 +241,13 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
-### `MsgId::MotorSequence` (`MotorSequencePayload`)
+### `MsgId::MotorSequence` (`MotorSequencePayloadTemplate<5>`)
 
-**Direction:** `Bidirectional`<br>
-**Publishes:** `UdpBridge`<br>
+> Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence.
+
+**Direction:** `Inbound`<br>
 **Subscribes:** `MotorService`<br>
-**Wire size:** 65 bytes
+**Wire size:** 35 bytes
 
 <table>
   <thead>
@@ -159,15 +270,36 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
     </tr>
     <tr>
       <td>steps</td>
-      <td>MotorSubCmd[10]</td>
-      <td>bytes</td>
-      <td>60</td>
+      <td>std::array<MotorSubCmd, 5></td>
+      <td>Any</td>
+      <td>30</td>
       <td>5</td>
     </tr>
   </tbody>
 </table>
 
+#### Sub-struct: `std::array<MotorSubCmd, 5>`
+
+**Wire size:** 30 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>_M_elems</td>
+      <td>MotorSubCmd[5]</td>
+      <td>bytes</td>
+      <td>30</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
 #### Sub-struct: `MotorSubCmd`
+
+> One timed motor command step, embedded in MotorSequencePayload.
 
 **Wire size:** 6 bytes
 
@@ -195,8 +327,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 ### `MsgId::KinematicsRequest` (`KinematicsRequestPayload`)
 
-**Direction:** `Bidirectional`<br>
-**Publishes:** `UdpBridge`<br>
+> One-byte sentinel. Send to request a KinematicsData snapshot. The payload value is ignored.
+
+**Direction:** `Inbound`<br>
 **Subscribes:** `KinematicsService`<br>
 **Wire size:** 1 bytes
 
@@ -217,9 +350,10 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 ### `MsgId::KinematicsData` (`KinematicsPayload`)
 
-**Direction:** `Bidirectional`<br>
+> Kinematics snapshot sent in response to a KinematicsRequest. Reflects physics state integrated since the start of the current sequence.
+
+**Direction:** `Outbound`<br>
 **Publishes:** `KinematicsService`<br>
-**Subscribes:** `UdpBridge`<br>
 **Wire size:** 16 bytes
 
 <table>
@@ -260,8 +394,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 ### `MsgId::PowerRequest` (`PowerRequestPayload`)
 
-**Direction:** `Bidirectional`<br>
-**Publishes:** `UdpBridge`<br>
+> One-byte sentinel. Send to request a PowerData snapshot. The payload value is ignored.
+
+**Direction:** `Inbound`<br>
 **Subscribes:** `PowerService`<br>
 **Wire size:** 1 bytes
 
@@ -282,9 +417,10 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 ### `MsgId::PowerData` (`PowerPayload`)
 
-**Direction:** `Bidirectional`<br>
+> Power-model snapshot sent in response to a PowerRequest. Models a simple battery with internal resistance drain.
+
+**Direction:** `Outbound`<br>
 **Publishes:** `PowerService`<br>
-**Subscribes:** `UdpBridge`<br>
 **Wire size:** 13 bytes
 
 <table>
@@ -325,7 +461,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 ### `MsgId::PhysicsTick` (`PhysicsTickPayload`)
 
-**Direction:** `Internal (C++ ↔ C++)`<br>
+> Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration.
+
+**Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
 **Subscribes:** `KinematicsService`, `PowerService`, `LogService`<br>
 **Wire size:** 10 bytes
@@ -361,7 +499,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 ### `MsgId::StateChange` (`StateChangePayload`)
 
-**Direction:** `Internal (C++ ↔ C++)`<br>
+> Internal IPC: Broadcast when moving into or out of Executing state.
+
+**Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
 **Subscribes:** `KinematicsService`, `PowerService`, `StateService`, `LogService`<br>
 **Wire size:** 5 bytes

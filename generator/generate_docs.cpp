@@ -8,20 +8,13 @@
 #include "app_components.h"
 #include "doc_generator.h"
 
-struct MainPublisher {
-  using Subscribes = ipc::MsgList<>;
-  using Publishes = ipc::MsgList<ipc::MsgId::Log>;
-};
-
 // Combine all sil_app services plus the virtual main publisher thread
-using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>(),
-                                              std::declval<std::tuple<MainPublisher>>()));
+using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>()));
 
 void emit_toc() {
-  constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
-      constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr auto e = EnumArrHolder<ipc::MsgId, get_enum_size<ipc::MsgId>()>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       using T = typename doc_payload_or_void<val>::type;
       if constexpr (!std::is_void_v<T>) {
@@ -33,19 +26,18 @@ void emit_toc() {
         std::cout << "- [`" << mname << "`](#" << link << ")\n";
       }
     }());
-  }(std::make_index_sequence<num_msgs>{});
+  }(std::make_index_sequence<get_enum_size<ipc::MsgId>()>{});
 }
 
 template <typename Components>
 void emit_payloads() {
-  constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
-      constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr auto e = EnumArrHolder<ipc::MsgId, get_enum_size<ipc::MsgId>()>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       emit_md_payload_section_for_msg_id<Components, val>();
     }());
-  }(std::make_index_sequence<num_msgs>{});
+  }(std::make_index_sequence<get_enum_size<ipc::MsgId>()>{});
 }
 
 template <typename Components>
@@ -55,10 +47,10 @@ void emit_components() {
     (..., [] {
       using C = std::tuple_element_t<Is, Components>;
       constexpr auto R = ^^C;
-      const std::string name{std::meta::identifier_of(R)};
-      const char* desc = get_desc<R>();
-      if (*desc) {
-        std::cout << "### `" << name << "`\n\n> " << desc << "\n\n";
+      const std::string name{cpp_type_name_str<C>()};
+      constexpr auto desc = get_desc<R>();
+      if (desc.text[0] != '\0') {
+        std::cout << "### `" << name << "`\n\n> " << desc.text << "\n\n";
       }
     }());
   }(std::make_index_sequence<num_components>{});
@@ -107,6 +99,8 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 ---
 
 ## Message Flow
+
+This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module to orchestrate test cases, `Network` maps the transport layer across two explicit sockets (`Client -> App` and `App -> Client`), and `Simulator` processes the messages internally.
 
 )";
 

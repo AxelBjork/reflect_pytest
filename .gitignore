@@ -48,4 +48,4 @@ dist/
 .DS_Store
 Thumbs.db
 .cache/clangd/index/*
-gcc
+gcc/*

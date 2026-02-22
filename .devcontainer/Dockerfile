@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     sudo \
     wget \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # ── GCC Trunk Compilation for C++26 Reflection ───────────────────────────────

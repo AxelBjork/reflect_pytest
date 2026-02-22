@@ -11,7 +11,11 @@ LogService::LogService(ipc::MessageBus& bus) : bus_(bus) {
 }
 
 LogService::~LogService() {
-  running_ = false;
+  {
+    std::lock_guard lk{mu_};
+    running_ = false;
+  }
+  cv_.notify_all();
   if (log_thread_.joinable()) log_thread_.join();
 }
 
@@ -36,9 +40,12 @@ void LogService::on_message(const ipc::StateChangePayload& sc) {
 }
 
 void LogService::log_loop() {
-  while (running_) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    if (!running_) break;
+  while (true) {
+    {
+      std::unique_lock lk{mu_};
+      cv_.wait_for(lk, std::chrono::milliseconds(1000), [this] { return !running_; });
+      if (!running_) break;
+    }
 
     ipc::SystemState st;
     uint32_t cid;

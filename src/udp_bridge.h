@@ -16,12 +16,16 @@
 namespace ipc {
 
 class DOC_DESC(
-    "Stateful bridge that relays IPC messages between the internal MessageBus and external "
-    "UDP clients for bidirectional testing.") UdpBridge {
+    "Stateful bridge that relays IPC messages between the internal MessageBus and external UDP "
+    "clients.\n\n"
+    "It remembers the IP address and port of the last connected test harness and bidirectionally "
+    "routes "
+    "all subscribed C++ events out through the UDP socket while safely injecting incoming UDP "
+    "datagrams "
+    "onto the internal MessageBus.") UdpBridge {
  public:
-  using Subscribes =
-      MsgList<MsgId::Log, MsgId::QueryState, MsgId::KinematicsData, MsgId::PowerData>;
-  using Publishes = MsgList<MsgId::QueryState, MsgId::MotorSequence, MsgId::KinematicsRequest,
+  using Subscribes = MsgList<MsgId::Log, MsgId::StateData, MsgId::KinematicsData, MsgId::PowerData>;
+  using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
                             MsgId::PowerRequest>;
 
   static constexpr uint16_t kDefaultPort = 9000;

@@ -8,6 +8,7 @@
 //
 // Adding a new message: add MsgId, add Payload struct, add MessageTraits<> in traits.h.
 
+#include <array>
 #include <cstdint>
 
 // doc_annotations.h — Compile-time annotation types for reflection-based
@@ -23,7 +24,7 @@
 // constexpr constructors as long as all members are public and they don't have
 // user-defined copy/move/destroy operations.
 
-#if defined(__cpp_reflection)
+#if defined(REFLECT_DOCS)
 #define DOC_DESC(...) [[= doc::Desc(__VA_ARGS__)]]
 #else
 #define DOC_DESC(...)
@@ -33,8 +34,14 @@ namespace doc {
 
 // Human-readable description of a struct or enum.
 struct Desc {
-  const char* text;
-  constexpr Desc(const char* t) : text(t) {
+  char text[512]{};
+  constexpr Desc(const char* t) {
+    int i = 0;
+    while (t[i] != '\0' && i < 511) {
+      text[i] = t[i];
+      i++;
+    }
+    text[i] = '\0';
   }
 };
 
@@ -47,7 +54,8 @@ namespace ipc {
 enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is the "
                     "first two bytes of every UDP datagram.") MsgId : uint16_t {
   Log,                // unidirectional log/trace from any component
-  QueryState,         // bidirectional: request + response carrying SystemState
+  StateRequest,       // Python -> C++: query simulator state (1-byte request)
+  StateData,          // C++ -> Python: simulator state snapshot
   MotorSequence,      // Python -> C++: execute a timed command sequence
   KinematicsRequest,  // Python -> C++: query position/speed (1-byte request)
   KinematicsData,     // C++ -> Python: kinematics snapshot response
@@ -74,7 +82,11 @@ enum class DOC_DESC("Identifies the subsystem that emitted a LogPayload.") Compo
   Logger,
   Bridge,
   Test,
-  Simulator
+  Simulator,
+  Motor,
+  Kinematics,
+  Power,
+  State
 };
 
 enum class DOC_DESC("Coarse lifecycle state of the SIL simulator.") SystemState : uint8_t {
@@ -96,15 +108,18 @@ struct DOC_DESC("One timed motor command step, embedded in MotorSequencePayload.
 
 // A sequence of up to 10 timed motor sub-commands.
 // The simulator executes steps[0..num_steps-1] in order, in real time.
-static constexpr uint8_t kMaxSubCmds = 10;
+static constexpr uint8_t kMaxSubCmds = 5;
 
+template <std::size_t N>
 struct DOC_DESC("Deliver a sequence of up to 10 timed motor sub-commands to the simulator. "
                 "The simulator executes steps[0..num_steps-1] in real time; a new command "
-                "preempts any currently running sequence.") MotorSequencePayload {
+                "preempts any currently running sequence.") MotorSequencePayloadTemplate {
   uint32_t cmd_id;
   uint8_t num_steps;
-  MotorSubCmd steps[kMaxSubCmds];
+  std::array<MotorSubCmd, N> steps;
 };
+
+using MotorSequencePayload = MotorSequencePayloadTemplate<kMaxSubCmds>;
 
 struct DOC_DESC("Unidirectional log/trace message. Emitted by any component at any time; "
                 "Python receives these passively from the bus.") LogPayload {
@@ -113,13 +128,17 @@ struct DOC_DESC("Unidirectional log/trace message. Emitted by any component at a
   ComponentId component;
 };
 
-struct DOC_DESC("Carries the current SystemState. Python sends this as a request "
-                "(with any state value); the simulator responds with the actual state.")
-    QueryStatePayload {
-  SystemState state;
+// 1-byte sentinel requests (trigger a C++ → UDP response on the paired MsgId).
+struct DOC_DESC(
+    "One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored.")
+    StateRequestPayload {
+  uint8_t reserved;
 };
 
-// 1-byte sentinel requests (trigger a C++ → UDP response on the paired MsgId).
+struct DOC_DESC("State machine snapshot sent in response to a StateRequest. "
+                "Carries the current coarse lifecycle SystemState.") StatePayload {
+  SystemState state;
+};
 struct DOC_DESC(
     "One-byte sentinel. Send to request a KinematicsData snapshot. The payload value is ignored.")
     KinematicsRequestPayload {
