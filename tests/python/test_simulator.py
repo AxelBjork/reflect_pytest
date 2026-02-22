@@ -15,9 +15,9 @@ import time
 import pytest
 from reflect_pytest.generated import (
     MsgId,
-    QueryStatePayload,
+    StateRequestPayload,
     SystemState,
-    MotorSequencePayloadTemplate_10 as MotorSequencePayload,
+    MotorSequencePayloadTemplate_5 as MotorSequencePayload,
     MotorSubCmd,
     KinematicsRequestPayload,
     KinematicsPayload,
@@ -33,7 +33,7 @@ R_INT = 0.5
 V_MAX = 12.6
 V_MIN = 10.5
 
-MAX_STEPS = 10
+MAX_STEPS = 5
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,9 +86,9 @@ def wait_for_sequence(udp: UdpClient,
     while time.monotonic() < deadline:
         drain_socket(udp)
         try:
-            udp.send_msg(MsgId.QueryState,
-                         QueryStatePayload(state=SystemState.Init))
-            state_resp = udp.recv_msg(expected_id=MsgId.QueryState)
+            udp.send_msg(MsgId.StateRequest,
+                         StateRequestPayload(reserved=0))
+            state_resp = udp.recv_msg(expected_id=MsgId.StateData)
             if state_resp and state_resp.state == SystemState.Ready:
                 drain_socket(udp)
                 udp.send_msg(MsgId.KinematicsRequest,
@@ -109,9 +109,9 @@ def wait_executing(udp: UdpClient, timeout: float = 1.0) -> None:
         time.sleep(0.01)
         try:
             drain_socket(udp)
-            udp.send_msg(MsgId.QueryState,
-                         QueryStatePayload(state=SystemState.Init))
-            resp = udp.recv_msg(expected_id=MsgId.QueryState)
+            udp.send_msg(MsgId.StateRequest,
+                         StateRequestPayload(reserved=0))
+            resp = udp.recv_msg(expected_id=MsgId.StateData)
             if resp and resp.state == SystemState.Executing:
                 return
         except TimeoutError:
@@ -150,9 +150,9 @@ def udp(sil_process):
             if sil_process.poll() is not None:
                 pytest.fail(f"sil_app exited (rc={sil_process.returncode})")
             try:
-                client.send_msg(MsgId.QueryState,
-                                QueryStatePayload(state=SystemState.Init))
-                resp = client.recv_msg(expected_id=MsgId.QueryState)
+                client.send_msg(MsgId.StateRequest,
+                                StateRequestPayload(reserved=0))
+                resp = client.recv_msg(expected_id=MsgId.StateData)
                 if resp and resp.state == SystemState.Ready:
                     break
             except TimeoutError:
@@ -168,8 +168,8 @@ def udp(sil_process):
 
 def test_starts_ready(udp):
     """Simulator should report Ready immediately after startup."""
-    udp.send_msg(MsgId.QueryState, QueryStatePayload(state=SystemState.Init))
-    resp = udp.recv_msg(expected_id=MsgId.QueryState)
+    udp.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
+    resp = udp.recv_msg(expected_id=MsgId.StateData)
     assert resp.state == SystemState.Ready
 
 
@@ -177,8 +177,8 @@ def test_transitions_to_executing(udp):
     """State must be Executing while a long sequence runs."""
     send_sequence(udp, cmd_id=1, steps=[(100, 200_000)])
     wait_executing(udp)
-    udp.send_msg(MsgId.QueryState, QueryStatePayload(state=SystemState.Init))
-    resp = udp.recv_msg(expected_id=MsgId.QueryState)
+    udp.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
+    resp = udp.recv_msg(expected_id=MsgId.StateData)
     assert resp.state == SystemState.Executing
 
 
@@ -186,8 +186,8 @@ def test_returns_to_ready_after_completion(udp):
     """State must return to Ready once a short sequence finishes."""
     send_sequence(udp, cmd_id=2, steps=[(100, 50_000)])  # 50 ms
     wait_for_sequence(udp, cmd_id=2, duration_us=50_000, slack=0.1)
-    udp.send_msg(MsgId.QueryState, QueryStatePayload(state=SystemState.Init))
-    resp = udp.recv_msg(expected_id=MsgId.QueryState)
+    udp.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
+    resp = udp.recv_msg(expected_id=MsgId.StateData)
     assert resp.state == SystemState.Ready
 
 
@@ -327,7 +327,7 @@ def test_cmd_id_echoed_in_power(udp):
 def test_max_steps_all_executed(udp):
     """All 10 sub-command slots should be executed."""
     # Each step: 50 RPM for 10 ms → 0.0005 m per step, 10 steps → 0.005 m
-    steps = [(50, 10_000)] * 10
+    steps = [(50, 10_000)] * MAX_STEPS
     send_sequence(udp, cmd_id=30, steps=steps)
     wait_for_sequence(udp, cmd_id=30, duration_us=100_000)
     k = query_kinematics(udp)

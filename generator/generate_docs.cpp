@@ -8,14 +8,8 @@
 #include "app_components.h"
 #include "doc_generator.h"
 
-struct MainPublisher {
-  using Subscribes = ipc::MsgList<>;
-  using Publishes = ipc::MsgList<ipc::MsgId::Log>;
-};
-
 // Combine all sil_app services plus the virtual main publisher thread
-using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>(),
-                                              std::declval<std::tuple<MainPublisher>>()));
+using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>()));
 
 void emit_toc() {
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {

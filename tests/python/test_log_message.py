@@ -6,7 +6,7 @@ import pytest
 from reflect_pytest.generated import (
     LogPayload,
     MsgId,
-    QueryStatePayload,
+    StateRequestPayload,
     SystemState,
     ComponentId,
     Severity,
@@ -20,16 +20,16 @@ def udp(sil_process):
     with UdpClient() as client:
         client.register()
 
-        # 1ms socket timeout: loopback QueryState roundtrip is ~100µs.
+        # 1ms socket timeout: loopback StateRequest roundtrip is ~100µs.
         client._sock.settimeout(0.001)
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
             if sil_process.poll() is not None:
                 pytest.fail(f"sil_app exited (rc={sil_process.returncode})")
             try:
-                client.send_msg(MsgId.QueryState,
-                                QueryStatePayload(state=SystemState.Init))
-                response = client.recv_msg(expected_id=MsgId.QueryState)
+                client.send_msg(MsgId.StateRequest,
+                                StateRequestPayload(reserved=0))
+                response = client.recv_msg(expected_id=MsgId.StateData)
                 if response and response.state == SystemState.Ready:
                     break
             except TimeoutError:

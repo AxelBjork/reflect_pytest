@@ -11,6 +11,7 @@ add_library(ipc STATIC
     src/socket_bus.cpp
     src/message_bus.cpp
     src/udp_bridge.cpp
+    src/component_logger.cpp
 )
 target_include_directories(ipc PUBLIC src messages)
 

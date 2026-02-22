@@ -4,6 +4,9 @@
 #include <mutex>
 
 #include "component.h"
+#include "component_logger.h"
+#include "message_bus.h"
+#include "messages.h"
 
 namespace sil {
 
@@ -20,14 +23,13 @@ class DOC_DESC(
     "limits:\n\n"
     "$$ I = |\\text{RPM}| \\times 0.005 \\text{ (A)} $$\n\n"
     "$$ V \\mathrel{-}= I \\times R_{int} \\times dt $$\n\n"
-    "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$")
-PowerService {
+    "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$") PowerService {
  public:
   using Subscribes =
       ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::PowerRequest, ipc::MsgId::StateChange>;
   using Publishes = ipc::MsgList<ipc::MsgId::PowerData>;
 
-  explicit PowerService(ipc::MessageBus& bus) : bus_(bus) {
+  explicit PowerService(ipc::MessageBus& bus) : bus_(bus), logger_(bus, ipc::ComponentId::Power) {
     ipc::bind_subscriptions(bus_, this);
   }
 
@@ -63,6 +65,7 @@ PowerService {
 
  private:
   ipc::MessageBus& bus_;
+  ComponentLogger logger_;
   std::mutex mu_;
 
   uint32_t cmd_id_{0};

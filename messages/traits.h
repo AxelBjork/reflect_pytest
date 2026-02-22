@@ -19,9 +19,14 @@ struct MessageTraits<MsgId::Log> {
   static constexpr std::string_view name = "Log";
 };
 template <>
-struct MessageTraits<MsgId::QueryState> {
-  using Payload = QueryStatePayload;
-  static constexpr std::string_view name = "QueryState";
+struct MessageTraits<MsgId::StateRequest> {
+  using Payload = StateRequestPayload;
+  static constexpr std::string_view name = "StateRequest";
+};
+template <>
+struct MessageTraits<MsgId::StateData> {
+  using Payload = StatePayload;
+  static constexpr std::string_view name = "StateData";
 };
 template <>
 struct MessageTraits<MsgId::MotorSequence> {

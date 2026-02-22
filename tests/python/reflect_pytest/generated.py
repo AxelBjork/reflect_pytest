@@ -7,14 +7,15 @@ from enum import IntEnum
 class MsgId(IntEnum):
     """Top-level message type selector. The uint16_t wire value is the first two bytes of every UDP datagram."""
     Log = 0
-    QueryState = 1
-    MotorSequence = 2
-    KinematicsRequest = 3
-    KinematicsData = 4
-    PowerRequest = 5
-    PowerData = 6
-    PhysicsTick = 7
-    StateChange = 8
+    StateRequest = 1
+    StateData = 2
+    MotorSequence = 3
+    KinematicsRequest = 4
+    KinematicsData = 5
+    PowerRequest = 6
+    PowerData = 7
+    PhysicsTick = 8
+    StateChange = 9
 
 class Severity(IntEnum):
     """Severity level attached to every LogPayload message."""
@@ -31,6 +32,10 @@ class ComponentId(IntEnum):
     Bridge = 3
     Test = 4
     Simulator = 5
+    Motor = 6
+    Kinematics = 7
+    Power = 8
+    State = 9
 
 class SystemState(IntEnum):
     """Coarse lifecycle state of the SIL simulator."""
@@ -77,8 +82,25 @@ class LogPayload:
         return cls(text=text, severity=severity, component=component)
 
 @dataclass
-class QueryStatePayload:
-    """Carries the current SystemState. Python sends this as a request (with any state value); the simulator responds with the actual state."""
+class StateRequestPayload:
+    """One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored."""
+    reserved: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "StateRequestPayload":
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
+
+@dataclass
+class StatePayload:
+    """State machine snapshot sent in response to a StateRequest. Carries the current coarse lifecycle SystemState."""
     state: SystemState
 
     def pack_wire(self) -> bytes:
@@ -87,14 +109,14 @@ class QueryStatePayload:
         return bytes(data)
 
     @classmethod
-    def unpack_wire(cls, data: bytes) -> "QueryStatePayload":
+    def unpack_wire(cls, data: bytes) -> "StatePayload":
         offset = 0
         state = struct.unpack_from("<B", data, offset)[0]
         offset += struct.calcsize("<B")
         return cls(state=state)
 
 @dataclass
-class MotorSequencePayloadTemplate_10:
+class MotorSequencePayloadTemplate_5:
     """Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence."""
     cmd_id: int
     num_steps: int
@@ -115,12 +137,12 @@ class MotorSequencePayloadTemplate_10:
         return bytes(data)
 
     @classmethod
-    def unpack_wire(cls, data: bytes) -> "MotorSequencePayloadTemplate_10":
+    def unpack_wire(cls, data: bytes) -> "MotorSequencePayloadTemplate_5":
         offset = 0
         cmd_id, num_steps = struct.unpack_from("<IB", data, offset)
         offset += struct.calcsize("<IB")
         steps = []
-        for _ in range(10):
+        for _ in range(5):
             sub_size = len(MotorSubCmd().pack_wire()) if hasattr(MotorSubCmd, 'pack_wire') else struct.calcsize(MotorSubCmd.SUBCMD_FMT)
             item = MotorSubCmd.unpack_wire(data[offset:offset+sub_size])
             steps.append(item)
@@ -240,8 +262,9 @@ class StateChangePayload:
 
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
-    MsgId.QueryState: QueryStatePayload,
-    MsgId.MotorSequence: MotorSequencePayloadTemplate_10,
+    MsgId.StateRequest: StateRequestPayload,
+    MsgId.StateData: StatePayload,
+    MsgId.MotorSequence: MotorSequencePayloadTemplate_5,
     MsgId.KinematicsRequest: KinematicsRequestPayload,
     MsgId.KinematicsData: KinematicsPayload,
     MsgId.PowerRequest: PowerRequestPayload,
@@ -252,8 +275,9 @@ MESSAGE_BY_ID = {
 
 PAYLOAD_SIZE_BY_ID = {
     MsgId.Log: 257,
-    MsgId.QueryState: 1,
-    MsgId.MotorSequence: 65,
+    MsgId.StateRequest: 1,
+    MsgId.StateData: 1,
+    MsgId.MotorSequence: 35,
     MsgId.KinematicsRequest: 1,
     MsgId.KinematicsData: 16,
     MsgId.PowerRequest: 1,

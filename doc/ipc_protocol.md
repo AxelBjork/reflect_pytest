@@ -62,12 +62,10 @@ flowchart LR
         StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine of the simulation."])
         LogService(["LogService<br/><br/>Periodically aggregates system<br/>state into human-readable text logs<br/>for debugging."])
         UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
-        MainPublisher(["MainPublisher"])
         %% Bridge Distribution
         LogService -->|Log| UdpBridge
-        MainPublisher -->|Log| UdpBridge
-        UdpBridge -->|QueryState| StateService
-        StateService -->|QueryState| UdpBridge
+        UdpBridge -->|StateRequest| StateService
+        StateService -->|StateData| UdpBridge
         UdpBridge -->|MotorSequence| MotorService
         UdpBridge -->|KinematicsRequest| KinematicsService
         KinematicsService -->|KinematicsData| UdpBridge
@@ -84,10 +82,10 @@ flowchart LR
 
     %% ─── INBOUND PATH ───
     TestCase -->|send_msg| TX
-    TX -->|"QueryState<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest"| UdpBridge
+    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest"| UdpBridge
 
     %% ─── OUTBOUND PATH ───
-    UdpBridge -->|"Log<br/>QueryState<br/>KinematicsData<br/>PowerData"| RX
+    UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData"| RX
     RX -->|recv_msg| TestCase
 ```
 
@@ -148,8 +146,9 @@ It remembers the IP address and port of the last connected test harness and bidi
 ## Message Payloads
 
 - [`Log`](#msgidlog-logpayload)
-- [`QueryState`](#msgidquerystate-querystatepayload)
-- [`MotorSequence`](#msgidmotorsequence-motorsequencepayloadtemplate<10>)
+- [`StateRequest`](#msgidstaterequest-staterequestpayload)
+- [`StateData`](#msgidstatedata-statepayload)
+- [`MotorSequence`](#msgidmotorsequence-motorsequencepayloadtemplate<5>)
 - [`KinematicsRequest`](#msgidkinematicsrequest-kinematicsrequestpayload)
 - [`KinematicsData`](#msgidkinematicsdata-kinematicspayload)
 - [`PowerRequest`](#msgidpowerrequest-powerrequestpayload)
@@ -164,7 +163,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 > Unidirectional log/trace message. Emitted by any component at any time; Python receives these passively from the bus.
 
 **Direction:** `Outbound`<br>
-**Publishes:** `LogService`, `MainPublisher`<br>
+**Publishes:** `LogService`<br>
 **Wire size:** 257 bytes
 
 <table>
@@ -196,13 +195,35 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
-### `MsgId::QueryState` (`QueryStatePayload`)
+### `MsgId::StateRequest` (`StateRequestPayload`)
 
-> Carries the current SystemState. Python sends this as a request (with any state value); the simulator responds with the actual state.
+> One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored.
 
-**Direction:** `Bidirectional`<br>
-**Publishes:** `StateService`<br>
+**Direction:** `Inbound`<br>
 **Subscribes:** `StateService`<br>
+**Wire size:** 1 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>reserved</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::StateData` (`StatePayload`)
+
+> State machine snapshot sent in response to a StateRequest. Carries the current coarse lifecycle SystemState.
+
+**Direction:** `Outbound`<br>
+**Publishes:** `StateService`<br>
 **Wire size:** 1 bytes
 
 <table>
@@ -220,13 +241,13 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
-### `MsgId::MotorSequence` (`MotorSequencePayloadTemplate<10>`)
+### `MsgId::MotorSequence` (`MotorSequencePayloadTemplate<5>`)
 
 > Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence.
 
 **Direction:** `Inbound`<br>
 **Subscribes:** `MotorService`<br>
-**Wire size:** 65 bytes
+**Wire size:** 35 bytes
 
 <table>
   <thead>
@@ -249,17 +270,17 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
     </tr>
     <tr>
       <td>steps</td>
-      <td>std::array<MotorSubCmd, 10></td>
+      <td>std::array<MotorSubCmd, 5></td>
       <td>Any</td>
-      <td>60</td>
+      <td>30</td>
       <td>5</td>
     </tr>
   </tbody>
 </table>
 
-#### Sub-struct: `std::array<MotorSubCmd, 10>`
+#### Sub-struct: `std::array<MotorSubCmd, 5>`
 
-**Wire size:** 60 bytes
+**Wire size:** 30 bytes
 
 <table>
   <thead>
@@ -268,9 +289,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   <tbody>
     <tr>
       <td>_M_elems</td>
-      <td>MotorSubCmd[10]</td>
+      <td>MotorSubCmd[5]</td>
       <td>bytes</td>
-      <td>60</td>
+      <td>30</td>
       <td>0</td>
     </tr>
   </tbody>

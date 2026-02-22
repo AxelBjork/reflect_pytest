@@ -3,12 +3,12 @@
 import time
 
 import pytest
-from reflect_pytest.generated import MsgId, QueryStatePayload, SystemState
+from reflect_pytest.generated import MsgId, StateRequestPayload, SystemState
 from udp_client import UdpClient
 
 
 def _wait_for_ready(proc) -> float:
-    """Returns seconds until QueryState Ready, or raises on timeout/crash."""
+    """Returns seconds until StateData Ready, or raises on timeout/crash."""
     sock_client = UdpClient()
     sock_client._sock.settimeout(0.001)
     sock_client.register()
@@ -20,9 +20,9 @@ def _wait_for_ready(proc) -> float:
             sock_client.close()
             raise RuntimeError(f"sil_app exited (rc={proc.returncode})")
         try:
-            sock_client.send_msg(MsgId.QueryState,
-                                 QueryStatePayload(state=SystemState.Init))
-            response = sock_client.recv_msg(expected_id=MsgId.QueryState)
+            sock_client.send_msg(MsgId.StateRequest,
+                                 StateRequestPayload(reserved=0))
+            response = sock_client.recv_msg(expected_id=MsgId.StateData)
             if response and response.state == SystemState.Ready:
                 elapsed = time.monotonic() - t0
                 sock_client.close()
@@ -36,7 +36,7 @@ def _wait_for_ready(proc) -> float:
 
 @pytest.mark.parametrize("n", range(1, 4))
 def test_startup_time(n, sil_process):
-    """Each iteration launches sil_app and times the QueryState handshake."""
+    """Each iteration launches sil_app and times the StateRequest handshake."""
     t0 = time.monotonic()
     ready_after = _wait_for_ready(sil_process)
     total = time.monotonic() - t0

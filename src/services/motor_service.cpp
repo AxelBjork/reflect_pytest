@@ -7,7 +7,8 @@ namespace sil {
 
 static constexpr uint32_t kTickUs = 10'000;  // 100Hz
 
-MotorService::MotorService(ipc::MessageBus& bus) : bus_(bus) {
+MotorService::MotorService(ipc::MessageBus& bus)
+    : bus_(bus), logger_(bus, ipc::ComponentId::Motor) {
   ipc::bind_subscriptions(bus_, this);
   exec_thread_ = std::thread([this] { exec_loop(); });
 }
@@ -23,6 +24,7 @@ MotorService::~MotorService() {
 }
 
 void MotorService::on_message(const ipc::MotorSequencePayload& cmd) {
+  logger_.info("Received MotorSequence with %u steps", cmd.num_steps);
   {
     std::lock_guard lk{mu_};
     pending_cmd_ = cmd;

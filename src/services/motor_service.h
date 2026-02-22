@@ -5,6 +5,8 @@
 #include <thread>
 
 #include "component.h"
+#include "component_logger.h"
+#include "messages.h"
 
 namespace sil {
 
@@ -27,6 +29,7 @@ class DOC_DESC(
 
  private:
   ipc::MessageBus& bus_;
+  ComponentLogger logger_;
   std::mutex mu_;
   std::condition_variable cv_;
   std::thread exec_thread_;

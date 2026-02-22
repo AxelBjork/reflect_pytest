@@ -22,12 +22,10 @@ class DOC_DESC(
     "routes "
     "all subscribed C++ events out through the UDP socket while safely injecting incoming UDP "
     "datagrams "
-    "onto the internal MessageBus.")
-UdpBridge {
+    "onto the internal MessageBus.") UdpBridge {
  public:
-  using Subscribes =
-      MsgList<MsgId::Log, MsgId::QueryState, MsgId::KinematicsData, MsgId::PowerData>;
-  using Publishes = MsgList<MsgId::QueryState, MsgId::MotorSequence, MsgId::KinematicsRequest,
+  using Subscribes = MsgList<MsgId::Log, MsgId::StateData, MsgId::KinematicsData, MsgId::PowerData>;
+  using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
                             MsgId::PowerRequest>;
 
   static constexpr uint16_t kDefaultPort = 9000;

@@ -2,6 +2,9 @@
 #include <mutex>
 
 #include "component.h"
+#include "component_logger.h"
+#include "message_bus.h"
+#include "messages.h"
 
 namespace sil {
 
@@ -14,14 +17,14 @@ class DOC_DESC(
     "this velocity over the `PhysicsTick` delta-time to continuously evaluate the vehicle's "
     "position:\n\n"
     "$$ v = \\text{RPM} \\times 0.01 \\text{ (m/s)} $$\n\n"
-    "$$ x = \\int v \\, dt $$")
- KinematicsService {
+    "$$ x = \\int v \\, dt $$") KinematicsService {
  public:
   using Subscribes =
       ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::KinematicsRequest, ipc::MsgId::StateChange>;
   using Publishes = ipc::MsgList<ipc::MsgId::KinematicsData>;
 
-  explicit KinematicsService(ipc::MessageBus& bus) : bus_(bus) {
+  explicit KinematicsService(ipc::MessageBus& bus)
+      : bus_(bus), logger_(bus, ipc::ComponentId::Kinematics) {
     ipc::bind_subscriptions(bus_, this);
   }
 
@@ -57,6 +60,7 @@ class DOC_DESC(
 
  private:
   ipc::MessageBus& bus_;
+  ComponentLogger logger_;
   std::mutex mu_;
 
   uint32_t cmd_id_{0};
