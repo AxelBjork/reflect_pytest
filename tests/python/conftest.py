@@ -13,9 +13,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+import importlib
 
 import pytest
-import time
 from reflect_pytest.generated import (
     MsgId,
     SystemState,
@@ -27,11 +27,6 @@ from udp_client import UdpClient
 _REPO_ROOT = Path(__file__).parents[2]
 _BUILD_DIR = _REPO_ROOT / "build"
 _DEFAULT_BIN = _BUILD_DIR / "sil_app"
-
-# Add the build-time generated python bindings to the sys.path
-_PYTHON_BUILD_DIR = _BUILD_DIR / "python"
-sys.path.insert(0, str(_PYTHON_BUILD_DIR))
-
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -119,7 +114,8 @@ def pytest_sessionstart(session):
             try:
                 from reflect_pytest.generated import (
                     MsgId,
-                    MotorSequencePayload,
+                    MotorSequencePayloadTemplate_5,
+                    MotorSubCmd,
                 )
                 from udp_client import UdpClient
 
@@ -130,13 +126,15 @@ def pytest_sessionstart(session):
                     steps = [(500, 2_000_000), (1000, 2_000_000),
                              (1500, 2_000_000), (-500, 2_000_000),
                              (-1000, 2_000_000), (-1500, 2_000_000)]
-                    packed = b"".join(
-                        struct.pack("<hI", r, d) for r, d in steps)
-                    packed = packed.ljust(60, b"\x00")
-                    seq = MotorSequencePayload(cmd_id=1,
-                                               num_steps=6,
-                                               steps=packed)
-                    udp.send_msg(MsgId.MotorSequence, seq)
+                    sub_cmds = [MotorSubCmd(speed_rpm=r, duration_us=d) for r, d in steps]
+                    for _ in range(5 - len(steps)):
+                        sub_cmds.append(MotorSubCmd(speed_rpm=0, duration_us=0))
+                    payload = MotorSequencePayloadTemplate_5(
+                        cmd_id=1,
+                        num_steps=len(steps),
+                        steps=sub_cmds,
+                    )
+                    udp.send_msg(MsgId.MotorSequence, payload)
                     print("\n[pytest] Injected demo sequence "
                           "(cmd=1, 6 steps)\n")
             except Exception as e:

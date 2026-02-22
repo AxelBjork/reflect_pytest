@@ -561,7 +561,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 # From the repo root:
 cmake -B build -G Ninja
 cmake --build build --target generate_docs
-# Output: build/doc/ipc_protocol.md
+# Output: build/doc/README.md
 ```
 
 _Generated with GCC trunk `-std=c++26 -freflection` (P2996R13 + P3394R4)._

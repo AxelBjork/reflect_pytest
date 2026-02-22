@@ -4,6 +4,7 @@ project(reflect_pytest CXX)
 set(CMAKE_CXX_STANDARD 26)  # Requires gcc trunk natively
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_compile_options(-fdiagnostics-color=always)
 set(CMAKE_BUILD_RPATH /usr/local/gcc-trunk/lib64)
 
 # ── IPC library ───────────────────────────────────────────────────────────────
@@ -48,15 +49,15 @@ target_compile_options(generate_docs PRIVATE -freflection)
 target_compile_definitions(generate_docs PRIVATE REFLECT_DOCS)
 
 add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/doc/ipc_protocol.md
+    OUTPUT ${CMAKE_SOURCE_DIR}/doc/README.md
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/doc
-    COMMAND generate_docs > ${CMAKE_SOURCE_DIR}/doc/ipc_protocol.md
+    COMMAND generate_docs > ${CMAKE_SOURCE_DIR}/doc/README.md
     DEPENDS generate_docs
     COMMENT "Generating IPC protocol Markdown documentation..."
 )
 
 add_custom_target(protocol_docs ALL
-    DEPENDS ${CMAKE_SOURCE_DIR}/doc/ipc_protocol.md
+    DEPENDS ${CMAKE_SOURCE_DIR}/doc/README.md
 )
 
 # ── GoogleTest ────────────────────────────────────────────────────────────────
