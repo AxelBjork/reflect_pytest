@@ -19,8 +19,8 @@ class DOC_DESC(
     "$$ v = \\text{RPM} \\times 0.01 \\text{ (m/s)} $$\n\n"
     "$$ x = \\int v \\, dt $$") KinematicsService {
  public:
-  using Subscribes =
-      ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::KinematicsRequest, ipc::MsgId::StateChange>;
+  using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::KinematicsRequest,
+                                  ipc::MsgId::StateChange, ipc::MsgId::ResetRequest>;
   using Publishes = ipc::MsgList<ipc::MsgId::KinematicsData>;
 
   explicit KinematicsService(ipc::MessageBus& bus) : bus_(bus), logger_("kinematics") {
@@ -49,6 +49,15 @@ class DOC_DESC(
     } else if (sc.state == ipc::SystemState::Ready) {
       speed_mps_ = 0.0f;
     }
+  }
+
+  void on_message(const ipc::ResetRequestPayload&) {
+    std::lock_guard lk{mu_};
+    elapsed_us_ = 0;
+    position_m_ = 0.0f;
+    speed_mps_ = 0.0f;
+    cmd_id_ = 0;
+    logger_.info("Physics state reset");
   }
 
   void on_message(const ipc::KinematicsRequestPayload&) {

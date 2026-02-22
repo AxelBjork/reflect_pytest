@@ -76,11 +76,14 @@ flowchart LR
         MotorService -.->|StateChange| KinematicsService
         MotorService -.->|StateChange| PowerService
         MotorService -.->|StateChange| StateService
+        UdpBridge -->|ResetRequest| KinematicsService
+
+        UdpBridge -->|ResetRequest| PowerService
     end
 
     %% ─── INBOUND PATH ───
     TestCase -->|send_msg| TX
-    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest"| UdpBridge
+    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest<br/>ResetRequest"| UdpBridge
 
     %% ─── OUTBOUND PATH ───
     UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData"| RX
@@ -153,6 +156,7 @@ It remembers the IP address and port of the last connected test harness and bidi
 - [`PowerData`](#msgidpowerdata-powerpayload)
 - [`PhysicsTick`](#msgidphysicstick-physicstickpayload)
 - [`StateChange`](#msgidstatechange-statechangepayload)
+- [`ResetRequest`](#msgidresetrequest-resetrequestpayload)
 
 Each section corresponds to one `MsgId` enumerator. The **direction badge** shows which side initiates the message.
 
@@ -522,6 +526,29 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>int</td>
       <td>4</td>
       <td>1</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::ResetRequest` (`ResetRequestPayload`)
+
+> One-byte sentinel. Send to request a full physics reset.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `KinematicsService`, `PowerService`<br>
+**Wire size:** 1 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>reserved</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>0</td>
     </tr>
   </tbody>
 </table>

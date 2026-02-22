@@ -25,8 +25,8 @@ class DOC_DESC(
     "$$ V \\mathrel{-}= I \\times R_{int} \\times dt $$\n\n"
     "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$") PowerService {
  public:
-  using Subscribes =
-      ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::PowerRequest, ipc::MsgId::StateChange>;
+  using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::PowerRequest,
+                                  ipc::MsgId::StateChange, ipc::MsgId::ResetRequest>;
   using Publishes = ipc::MsgList<ipc::MsgId::PowerData>;
 
   explicit PowerService(ipc::MessageBus& bus) : bus_(bus), logger_("power") {
@@ -55,6 +55,15 @@ class DOC_DESC(
     if (sc.state == ipc::SystemState::Ready) {
       current_a_ = 0.0f;
     }
+  }
+
+  void on_message(const ipc::ResetRequestPayload&) {
+    std::lock_guard lk{mu_};
+    voltage_v_ = V_MAX;
+    current_a_ = 0.0f;
+    soc_ = 100;
+    cmd_id_ = 0;
+    logger_.info("Power state reset");
   }
 
   void on_message(const ipc::PowerRequestPayload&) {

@@ -16,6 +16,7 @@ class MsgId(IntEnum):
     PowerData = 7
     PhysicsTick = 8
     StateChange = 9
+    ResetRequest = 10
 
 class Severity(IntEnum):
     """Severity level attached to every LogPayload message."""
@@ -247,6 +248,23 @@ class StateChangePayload:
         offset += struct.calcsize("<BI")
         return cls(state=state, cmd_id=cmd_id)
 
+@dataclass
+class ResetRequestPayload:
+    """One-byte sentinel. Send to request a full physics reset."""
+    reserved: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "ResetRequestPayload":
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
+
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
     MsgId.StateRequest: StateRequestPayload,
@@ -258,6 +276,7 @@ MESSAGE_BY_ID = {
     MsgId.PowerData: PowerPayload,
     MsgId.PhysicsTick: PhysicsTickPayload,
     MsgId.StateChange: StateChangePayload,
+    MsgId.ResetRequest: ResetRequestPayload,
 }
 
 PAYLOAD_SIZE_BY_ID = {
@@ -271,5 +290,6 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.PowerData: 13,
     MsgId.PhysicsTick: 10,
     MsgId.StateChange: 5,
+    MsgId.ResetRequest: 1,
 }
 

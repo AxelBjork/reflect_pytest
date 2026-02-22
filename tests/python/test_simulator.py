@@ -79,7 +79,7 @@ def drain_socket(udp: UdpClient) -> None:
 def wait_for_sequence(udp: UdpClient,
                       cmd_id: int,
                       duration_us: int,
-                      slack: float = 0.1) -> None:
+                      slack: float = 0.02) -> None:
     """Sleep for the sequence duration then do a single clean query."""
     time.sleep(duration_us / 1e6 + slack)
     deadline = time.monotonic() + 5.0
@@ -96,7 +96,7 @@ def wait_for_sequence(udp: UdpClient,
                 k = udp.recv_msg(expected_id=MsgId.KinematicsData)
                 if k and k.cmd_id == cmd_id:
                     return
-            time.sleep(0.01)
+            time.sleep(0.001)
         except TimeoutError:
             pass
     raise TimeoutError(f"Simulator did not finish sequence cmd_id={cmd_id}")
@@ -137,30 +137,6 @@ def expected_voltage_drop(steps: list[tuple[int, int]]) -> float:
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
-
-
-@pytest.fixture
-def udp(sil_process):
-    """Fresh UDP client per test; waits for Ready before yielding."""
-    with UdpClient(client_port=9002) as client:
-        client.register()
-        client._sock.settimeout(0.001)
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline:
-            if sil_process.poll() is not None:
-                pytest.fail(f"sil_app exited (rc={sil_process.returncode})")
-            try:
-                client.send_msg(MsgId.StateRequest,
-                                StateRequestPayload(reserved=0))
-                resp = client.recv_msg(expected_id=MsgId.StateData)
-                if resp and resp.state == SystemState.Ready:
-                    break
-            except TimeoutError:
-                pass
-        else:
-            pytest.fail("SIL did not report Ready in time")
-        client._sock.settimeout(1.0)
-        yield client
 
 
 # ── Tests: state machine ─────────────────────────────────────────────────────

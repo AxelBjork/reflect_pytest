@@ -66,4 +66,10 @@ struct MessageTraits<MsgId::StateChange> {
   static constexpr std::string_view name = "StateChange";
 };
 
+template <>
+struct MessageTraits<MsgId::ResetRequest> {
+  using Payload = ResetRequestPayload;
+  static constexpr std::string_view name = "ResetRequest";
+};
+
 }  // namespace ipc

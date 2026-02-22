@@ -24,9 +24,6 @@ class MessageBus {
   // Subscribe to a specific message type.
   void subscribe(MsgId id, Handler h);
 
-  // Subscribe to every message (used by UdpBridge).
-  void subscribe_all(Handler h);
-
   // Publish a typed message through the bus.
   template <MsgId Id>
   void publish(const typename MessageTraits<Id>::Payload& payload) {
@@ -38,6 +35,11 @@ class MessageBus {
     client_.send_raw(id, data, size);
   }
 
+  // Allow TypedPublisher to access private methods if needed,
+  // but better to just provide access to what it needs.
+  template <typename T>
+  friend class TypedPublisher;
+
  private:
   SocketBus server_;  // bound; the listener reads from here
   SocketBus client_;  // connected; publish() writes here
@@ -46,7 +48,6 @@ class MessageBus {
   std::thread listener_thread_;
   std::mutex mu_;
   std::unordered_map<uint16_t, std::vector<Handler>> per_id_subs_;
-  std::vector<Handler> wildcard_subs_;
 
   void listener_loop();
   void dispatch(RawMessage msg);

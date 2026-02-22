@@ -21,7 +21,9 @@ add_executable(sil_app src/main.cpp
     src/services/log_service.cpp)
 target_link_libraries(sil_app PRIVATE ipc)
 
-# ── Python Generator (only this target needs -freflection) ────────────────────
+
+
+# ── Python Generator (this target needs -freflection) ────────────────────
 add_executable(generate_bindings generator/generate_bindings.cpp)
 target_include_directories(generate_bindings PRIVATE generator src messages)
 target_compile_options(generate_bindings PRIVATE -freflection)

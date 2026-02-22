@@ -15,6 +15,14 @@ import time
 from pathlib import Path
 
 import pytest
+import time
+from reflect_pytest.generated import (
+    MsgId,
+    SystemState,
+    StateRequestPayload,
+    ResetRequestPayload,
+)
+from udp_client import UdpClient
 
 _REPO_ROOT = Path(__file__).parents[2]
 _BUILD_DIR = _REPO_ROOT / "build"
@@ -172,7 +180,7 @@ def _sil_binary() -> Path:
     return path
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def sil_process():
     """Launch sil_app for the test session; terminate it afterwards."""
     proc = subprocess.Popen([str(_sil_binary())])
@@ -183,3 +191,36 @@ def sil_process():
     except subprocess.TimeoutExpired:
         proc.kill()
         proc.wait()
+
+
+@pytest.fixture(scope="session")
+def udp(sil_process):
+    """Fresh UDP client per test; waits for Ready before yielding."""
+    with UdpClient(client_port=0) as client:
+        client.register()
+        client._sock.settimeout(0.001)
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if sil_process.poll() is not None:
+                pytest.fail(f"sil_app exited (rc={sil_process.returncode})")
+            try:
+                client.send_msg(MsgId.StateRequest,
+                                StateRequestPayload(reserved=0))
+                resp = client.recv_msg(expected_id=MsgId.StateData)
+                if resp and resp.state == SystemState.Ready:
+                    break
+            except TimeoutError:
+                pass
+            time.sleep(0.001)
+        else:
+            pytest.fail("SIL did not report Ready in time")
+        client._sock.settimeout(1.0)
+        yield client
+
+
+@pytest.fixture(scope="function", autouse=True)
+def reset_sim(udp):
+    """Automatically reset simulation state before every test."""
+    udp.send_msg(MsgId.ResetRequest, ResetRequestPayload(reserved=0))
+    # Tiny sleep to ensure C++ processes it before the next command
+    time.sleep(0.001)

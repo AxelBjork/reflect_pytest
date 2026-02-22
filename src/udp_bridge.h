@@ -26,7 +26,7 @@ class DOC_DESC(
  public:
   using Subscribes = MsgList<MsgId::Log, MsgId::StateData, MsgId::KinematicsData, MsgId::PowerData>;
   using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
-                            MsgId::PowerRequest>;
+                            MsgId::PowerRequest, MsgId::ResetRequest>;
 
   static constexpr uint16_t kDefaultPort = 9000;
 
@@ -37,7 +37,7 @@ class DOC_DESC(
   UdpBridge& operator=(const UdpBridge&) = delete;
 
  private:
-  MessageBus& bus_;
+  TypedPublisher<UdpBridge> bus_;
   int udp_fd_;
   int wake_[2];
   std::thread rx_thread_;

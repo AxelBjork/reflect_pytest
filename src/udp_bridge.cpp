@@ -38,7 +38,7 @@ UdpBridge::UdpBridge(MessageBus& bus) : bus_(bus) {
 
   // Subscribe to explicit outgoing messages using the type list
   auto bind_udp = [this]<MsgId... Ids>(MsgList<Ids...>) {
-    (bus_.subscribe(Ids, [this](RawMessage msg) { forward_to_udp(std::move(msg)); }), ...);
+    (bus_.bus().subscribe(Ids, [this](RawMessage msg) { forward_to_udp(std::move(msg)); }), ...);
   };
   bind_udp(Subscribes{});
 
@@ -89,8 +89,8 @@ void UdpBridge::rx_loop() {
 
       uint16_t id_raw{};
       std::memcpy(&id_raw, buf, sizeof(id_raw));
-      bus_.publish_raw(static_cast<MsgId>(id_raw), buf + sizeof(uint16_t),
-                       static_cast<size_t>(n) - sizeof(uint16_t));
+      bus_.publish_if_authorized(static_cast<MsgId>(id_raw), buf + sizeof(uint16_t),
+                                 static_cast<size_t>(n) - sizeof(uint16_t));
     }
   }
 }

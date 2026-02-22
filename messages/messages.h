@@ -63,8 +63,9 @@ enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is
   PowerData,          // C++ -> Python: power snapshot response
 
   // -- Internal Component IPC --
-  PhysicsTick,  // Motor -> Others: 100Hz tick with RPM and dt_us
-  StateChange,  // Motor -> Others: SystemState transition
+  PhysicsTick,   // Motor -> Others: 100Hz tick with RPM and dt_us
+  StateChange,   // Motor -> Others: SystemState transition
+  ResetRequest,  // Python -> C++: Reset all physics state
 };
 
 // ── Supporting enums ─────────────────────────────────────────────────────────
@@ -116,6 +117,10 @@ struct DOC_DESC("Unidirectional log/trace message. Emitted by any component at a
 };
 
 // 1-byte sentinel requests (trigger a C++ → UDP response on the paired MsgId).
+struct DOC_DESC("One-byte sentinel. Send to request a full physics reset.") ResetRequestPayload {
+  uint8_t reserved;
+};
+
 struct DOC_DESC(
     "One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored.")
     StateRequestPayload {
