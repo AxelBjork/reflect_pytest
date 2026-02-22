@@ -38,6 +38,8 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 ## Message Flow
 
+This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module to orchestrate test cases, `Network` maps the transport layer across two explicit sockets (`Client -> App` and `App -> Client`), and `Simulator` processes the messages internally.
+
 ```mermaid
 flowchart LR
     %% ─── COLUMN 1: Pytest Test Harness ───

@@ -14,6 +14,7 @@
 #include <string_view>
 #include <type_traits>
 
+#include "common.h"
 #include "component.h"
 #include "messages.h"
 #include "traits.h"
@@ -153,69 +154,6 @@ bool print_publishers() {
   return print_publishers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-// -------------------------------------------------------------------------------------------------
-// Enum helpers (independent of python_code_generator.h)
-// -------------------------------------------------------------------------------------------------
-
-template <typename E>
-consteval std::size_t doc_get_enum_size() {
-  return std::meta::enumerators_of(^^E).size();
-}
-
-template <typename E, std::size_t N>
-consteval std::array<std::meta::info, N> doc_get_enum_array() {
-  auto vec = std::meta::enumerators_of(^^E);
-  std::array<std::meta::info, N> arr{};
-  for (std::size_t i = 0; i < N; ++i) arr[i] = vec[i];
-  return arr;
-}
-
-template <typename E, std::size_t N>
-struct DocEnumArrHolder {
-  static constexpr auto arr = doc_get_enum_array<E, N>();
-};
-
-// -------------------------------------------------------------------------------------------------
-// Struct field helpers
-// -------------------------------------------------------------------------------------------------
-
-template <typename T>
-consteval std::size_t doc_get_fields_size() {
-  auto ctx = std::meta::access_context::current();
-  return std::meta::nonstatic_data_members_of(^^T, ctx).size();
-}
-
-template <typename T, std::size_t N>
-consteval std::array<std::meta::info, N> doc_get_fields_array() {
-  auto ctx = std::meta::access_context::current();
-  auto vec = std::meta::nonstatic_data_members_of(^^T, ctx);
-  std::array<std::meta::info, N> arr{};
-  for (std::size_t i = 0; i < N; ++i) arr[i] = vec[i];
-  return arr;
-}
-
-template <typename T, std::size_t N>
-struct DocStructArrHolder {
-  static constexpr auto arr = doc_get_fields_array<T, N>();
-};
-
-// -------------------------------------------------------------------------------------------------
-// Annotation readers
-// -------------------------------------------------------------------------------------------------
-
-// Returns doc::Desc::text if the entity has one, otherwise "".
-template <std::meta::info R>
-consteval doc::Desc get_desc() {
-  for (std::meta::info a : std::meta::annotations_of(R)) {
-    if (std::meta::type_of(a) == ^^doc::Desc) {
-      return std::meta::extract<doc::Desc>(a);
-    }
-    if (std::meta::type_of(a) == ^^const doc::Desc) {
-      return std::meta::extract<const doc::Desc>(a);
-    }
-  }
-  return doc::Desc("");
-}
 
 // -------------------------------------------------------------------------------------------------
 // Human-readable C++ type name
@@ -287,7 +225,7 @@ void emit_md_struct_section(std::set<std::string>& visited);
 
 template <typename T>
 void emit_field_table(std::set<std::string>& visited) {
-  constexpr std::size_t N = doc_get_fields_size<T>();
+  constexpr std::size_t N = get_fields_size<T>();
   if constexpr (N == 0) {
     std::cout << "_No fields._\n\n";
     return;
@@ -302,7 +240,7 @@ void emit_field_table(std::set<std::string>& visited) {
 
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [&] {
-      constexpr auto field = DocStructArrHolder<T, N>::arr[Is];
+      constexpr auto field = StructArrHolder<T, N>::arr[Is];
       constexpr auto type = std::meta::type_of(field);
 
       const std::string fname{std::meta::identifier_of(field)};
@@ -328,7 +266,7 @@ void emit_field_table(std::set<std::string>& visited) {
 
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [&] {
-      constexpr auto field = DocStructArrHolder<T, N>::arr[Is];
+      constexpr auto field = StructArrHolder<T, N>::arr[Is];
       constexpr auto type = std::meta::type_of(field);
       using FT = typename[:type:];
       using BaseT = std::remove_all_extents_t<FT>;
@@ -374,10 +312,10 @@ void emit_md_enum_section() {
   std::cout << "| Enumerator | Value |\n";
   std::cout << "|---|---|\n";
 
-  constexpr std::size_t N = doc_get_enum_size<E>();
+  constexpr std::size_t N = get_enum_size<E>();
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
-      constexpr auto e = DocEnumArrHolder<E, N>::arr[Is];
+      constexpr auto e = EnumArrHolder<E, N>::arr[Is];
       std::cout << "| `" << std::meta::identifier_of(e) << "` | `" << static_cast<uint32_t>([:e:])
                 << "` |\n";
     }());
@@ -566,7 +504,7 @@ void emit_mermaid_edge_for_msg_id(std::string& inbound, std::string& outbound, b
 
 template <typename Components>
 void emit_mermaid_flow() {
-  constexpr std::size_t num_msgs = doc_get_enum_size<ipc::MsgId>();
+  constexpr std::size_t num_msgs = get_enum_size<ipc::MsgId>();
 
   std::cout << "```mermaid\nflowchart LR\n";
   std::cout << "    %% ─── COLUMN 1: Pytest Test Harness ───\n";
@@ -642,7 +580,7 @@ void emit_mermaid_flow() {
 
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [](std::string& in_msgs, std::string& out_msgs, bool& f_in, bool& f_out) {
-      constexpr auto e = DocEnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       emit_mermaid_edge_for_msg_id<Components, val>(in_msgs, out_msgs, f_in, f_out);
     }(inbound_msgs, outbound_msgs, first_in, first_out));
