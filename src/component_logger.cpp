@@ -1,13 +1,23 @@
 #include "component_logger.h"
 
+#include "services/log_service.h"
+
 namespace sil {
 
+LogService* ComponentLogger::sink_ = nullptr;
+
+void ComponentLogger::init(LogService& service) {
+  sink_ = &service;
+}
+
 void ComponentLogger::log_valist(ipc::Severity severity, const char* fmt, va_list args) const {
+  if (!sink_) return;
+
   ipc::LogPayload p{};
   p.severity = severity;
-  p.component = component_;
+  std::strncpy(p.component, name_, sizeof(p.component) - 1);
   std::vsnprintf(p.text, sizeof(p.text), fmt, args);
-  bus_.publish<ipc::MsgId::Log>(p);
+  sink_->log(p);
 }
 
 void ComponentLogger::debug(const char* fmt, ...) const {

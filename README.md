@@ -21,27 +21,32 @@ flowchart TD
 
         subgraph ipc["IPC Layer"]
             BUS[["MessageBus<br/>(AF_UNIX pub/sub)"]]
-            BRIDGE["UdpBridge<br/>(subscribes to all & forwards to UDP;<br/>injects UDP telemetry into bus)"]
+            BRIDGE["UdpBridge<br/>(relays IPC to UDP)"]
+            LOGS["LogService<br/>(async logging sink)"]
         end
 
-        PUB -- "publish<MotorCmd> (AF_UNIX)" --> BUS
-        BUS -- "dispatch (in memory)" --> SUB
-        BUS -- "relay over socket" --> BRIDGE
+        PUB -- "publish (AF_UNIX)" --> BUS
+        BUS -- "dispatch" --> SUB
+        BUS -- "relay" --> BRIDGE
+        modules -- "async log" --> LOGS
+        LOGS -- "publish" --> BUS
     end
 
     subgraph py["Python SIL Suite (pytest)"]
         direction TB
-        TEST["Test Cases<br/>(Behavior assertions)"]
-        CLIENT["UdpClient<br/>(via auto-generated _reflect pybind11)"]
+        TEST["Test Cases<br/>(Assertions)"]
+        CLIENT["UdpClient<br/>(auto-generated bindings)"]
         
-        TEST -- "send/recv structured payload" <--> CLIENT
+        TEST <--> CLIENT
     end
 
-    BRIDGE <-->|"UDP :9000<br/>(host byte-order wire format)"| CLIENT
+    BRIDGE <-->|"UDP :9000"| CLIENT
 
     classDef proc fill:#f9f9f9,stroke:#333,stroke-width:2px;
     class cpp,py proc;
 ```
+
+For more details on the software architecture and principles, see [Software Design](doc/agent/design.md).
 
 **Wire format** (identical on AF_UNIX and UDP):
 ```
@@ -91,6 +96,6 @@ In this devcontainer, the compiler is provided by the `gcc-snapshot` package fro
 | Build | CMake + Ninja |
 | IPC | AF_UNIX `SOCK_DGRAM` |
 | Test transport | UDP (single port 9000) |
-| Python bindings | pybind11 (auto-generated) |
+| Python bindings | C++26 reflection (auto-generated) |
 | C++ unit tests | GoogleTest |
 | SIL test runner | pytest + pytest-cov + pytest-xdist |

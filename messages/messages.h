@@ -76,19 +76,6 @@ enum class DOC_DESC("Severity level attached to every LogPayload message.") Seve
   Error
 };
 
-enum class DOC_DESC("Identifies the subsystem that emitted a LogPayload.") ComponentId : uint8_t {
-  Main,
-  Bus,
-  Logger,
-  Bridge,
-  Test,
-  Simulator,
-  Motor,
-  Kinematics,
-  Power,
-  State
-};
-
 enum class DOC_DESC("Coarse lifecycle state of the SIL simulator.") SystemState : uint8_t {
   Init,
   Ready,
@@ -125,7 +112,7 @@ struct DOC_DESC("Unidirectional log/trace message. Emitted by any component at a
                 "Python receives these passively from the bus.") LogPayload {
   char text[255];
   Severity severity;
-  ComponentId component;
+  char component[32];
 };
 
 // 1-byte sentinel requests (trigger a C++ → UDP response on the paired MsgId).

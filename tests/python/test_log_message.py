@@ -8,7 +8,6 @@ from reflect_pytest.generated import (
     MsgId,
     StateRequestPayload,
     SystemState,
-    ComponentId,
     Severity,
 )
 from udp_client import UdpClient
@@ -49,7 +48,7 @@ def test_inject_hello_world(udp):
     sent = LogPayload(
         text=b"Hello World from pytest\x00",
         severity=Severity.Info,
-        component=ComponentId.Test,
+        component=b"test",
     )
 
     # 1ms poll: loopback echo is near-instant, retry on drop.
@@ -60,7 +59,7 @@ def test_inject_hello_world(udp):
             udp.send_msg(MsgId.Log, sent)
             try:
                 log = udp.recv_msg(expected_id=MsgId.Log)
-                if b"Hello World from pytest" in log.text and log.component == ComponentId.Test:
+                if b"Hello World from pytest" in log.text and b"test" in log.component:
                     return
             except TimeoutError:
                 pass

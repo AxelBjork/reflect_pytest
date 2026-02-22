@@ -1,13 +1,30 @@
 #include "services/log_service.h"
 
-#include <algorithm>
-#include <cmath>
+#include <cstdio>
+#include <cstring>
+
+#include "component_logger.h"
 
 namespace sil {
 
+static constexpr const char* sev_str(ipc::Severity s) {
+  switch (s) {
+    case ipc::Severity::Debug:
+      return "DEBUG";
+    case ipc::Severity::Info:
+      return "INFO";
+    case ipc::Severity::Warn:
+      return "WARN";
+    case ipc::Severity::Error:
+      return "ERROR";
+  }
+  return "?";
+}
+
 LogService::LogService(ipc::MessageBus& bus) : bus_(bus) {
+  ComponentLogger::init(*this);
   ipc::bind_subscriptions(bus_, this);
-  log_thread_ = std::thread([this] { log_loop(); });
+  worker_thread_ = std::thread([this] { worker_loop(); });
 }
 
 LogService::~LogService() {
@@ -16,60 +33,38 @@ LogService::~LogService() {
     running_ = false;
   }
   cv_.notify_all();
-  if (log_thread_.joinable()) log_thread_.join();
+  if (worker_thread_.joinable()) worker_thread_.join();
 }
 
-void LogService::on_message(const ipc::PhysicsTickPayload& tick) {
-  std::lock_guard lk{mu_};
-  float dt_s = tick.dt_us / 1e6f;
-  speed_mps_ = tick.speed_rpm * 0.01f;
-  pos_m_ += speed_mps_ * dt_s;
-  current_a_ = std::abs(tick.speed_rpm) * 0.005f;
-  float dv = current_a_ * 0.5f * dt_s;
-  voltage_v_ = std::max(10.5f, voltage_v_ - dv);
-}
-
-void LogService::on_message(const ipc::StateChangePayload& sc) {
-  std::lock_guard lk{mu_};
-  cmd_id_ = sc.cmd_id;
-  state_ = sc.state;
-  if (sc.state == ipc::SystemState::Ready) {
-    speed_mps_ = 0.0f;
-    current_a_ = 0.0f;
+void LogService::log(const ipc::LogPayload& p) {
+  {
+    std::lock_guard lk{mu_};
+    queue_.push(p);
   }
+  cv_.notify_one();
 }
 
-void LogService::log_loop() {
+void LogService::worker_loop() {
   while (true) {
+    std::queue<ipc::LogPayload> to_process;
     {
       std::unique_lock lk{mu_};
-      cv_.wait_for(lk, std::chrono::milliseconds(1000), [this] { return !running_; });
-      if (!running_) break;
+      cv_.wait(lk, [this] { return !queue_.empty() || !running_; });
+      if (!running_ && queue_.empty()) break;
+      std::swap(to_process, queue_);
     }
 
-    ipc::SystemState st;
-    uint32_t cid;
-    float pos, v, curr;
-    {
-      std::lock_guard lk{mu_};
-      st = state_;
-      cid = cmd_id_;
-      pos = pos_m_;
-      v = voltage_v_;
-      curr = current_a_;
+    while (!to_process.empty()) {
+      auto p = to_process.front();
+      to_process.pop();
+
+      // 1. Print to console (this is why we are on a worker thread)
+      std::printf("[%s][%s] %s\n", sev_str(p.severity), p.component, p.text);
+      std::fflush(stdout);
+
+      // 2. Publish to message bus so UdpBridge can send it to Python
+      bus_.publish<ipc::MsgId::Log>(p);
     }
-
-    const char* state_str = st == ipc::SystemState::Ready       ? "Ready"
-                            : st == ipc::SystemState::Executing ? "Executing"
-                            : st == ipc::SystemState::Fault     ? "Fault"
-                                                                : "Init";
-
-    ipc::LogPayload p{};
-    std::snprintf(p.text, sizeof(p.text), "[sim] state=%s cmd=%u pos=%.3fm v=%.2fV i=%.3fA",
-                  state_str, cid, pos, v, curr);
-    p.severity = ipc::Severity::Info;
-    p.component = ipc::ComponentId::Simulator;
-    bus_.publish<ipc::MsgId::Log>(p);
   }
 }
 

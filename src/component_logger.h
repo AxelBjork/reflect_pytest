@@ -8,10 +8,14 @@
 
 namespace sil {
 
+class LogService;
+
 class ComponentLogger {
  public:
-  ComponentLogger(ipc::MessageBus& bus, ipc::ComponentId component)
-      : bus_(bus), component_(component) {
+  // Global initialization of the logging sink
+  static void init(LogService& service);
+
+  explicit ComponentLogger(const char* name) : name_(name) {
   }
 
   void debug(const char* fmt, ...) const __attribute__((format(printf, 2, 3)));
@@ -20,8 +24,8 @@ class ComponentLogger {
   void error(const char* fmt, ...) const __attribute__((format(printf, 2, 3)));
 
  private:
-  ipc::MessageBus& bus_;
-  ipc::ComponentId component_;
+  const char* name_;
+  static LogService* sink_;
 
   void log_valist(ipc::Severity severity, const char* fmt, va_list args) const;
 };

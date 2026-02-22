@@ -1,6 +1,7 @@
 #pragma once
 
 #include <tuple>
+#include <type_traits>
 
 #include "services/kinematics_service.h"
 #include "services/log_service.h"

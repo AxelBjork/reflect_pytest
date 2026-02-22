@@ -16,7 +16,7 @@ add_library(ipc STATIC
 target_include_directories(ipc PUBLIC src messages)
 
 # ── SIL application ───────────────────────────────────────────────────────────
-add_executable(sil_app src/main.cpp src/logger.cpp 
+add_executable(sil_app src/main.cpp
     src/services/motor_service.cpp
     src/services/log_service.cpp)
 target_link_libraries(sil_app PRIVATE ipc)

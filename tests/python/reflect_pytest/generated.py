@@ -24,19 +24,6 @@ class Severity(IntEnum):
     Warn = 2
     Error = 3
 
-class ComponentId(IntEnum):
-    """Identifies the subsystem that emitted a LogPayload."""
-    Main = 0
-    Bus = 1
-    Logger = 2
-    Bridge = 3
-    Test = 4
-    Simulator = 5
-    Motor = 6
-    Kinematics = 7
-    Power = 8
-    State = 9
-
 class SystemState(IntEnum):
     """Coarse lifecycle state of the SIL simulator."""
     Init = 0
@@ -67,18 +54,18 @@ class LogPayload:
     """Unidirectional log/trace message. Emitted by any component at any time; Python receives these passively from the bus."""
     text: bytes
     severity: Severity
-    component: ComponentId
+    component: bytes
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<255sBB", self.text, self.severity, self.component))
+        data.extend(struct.pack("<255sB32s", self.text, self.severity, self.component))
         return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "LogPayload":
         offset = 0
-        text, severity, component = struct.unpack_from("<255sBB", data, offset)
-        offset += struct.calcsize("<255sBB")
+        text, severity, component = struct.unpack_from("<255sB32s", data, offset)
+        offset += struct.calcsize("<255sB32s")
         return cls(text=text, severity=severity, component=component)
 
 @dataclass
@@ -274,7 +261,7 @@ MESSAGE_BY_ID = {
 }
 
 PAYLOAD_SIZE_BY_ID = {
-    MsgId.Log: 257,
+    MsgId.Log: 288,
     MsgId.StateRequest: 1,
     MsgId.StateData: 1,
     MsgId.MotorSequence: 35,

@@ -9,7 +9,6 @@ int main() {
   // ── Enums ──────────────────────────────────────────────────────────────────
   generate_enum<ipc::MsgId>();
   generate_enum<ipc::Severity>();
-  generate_enum<ipc::ComponentId>();
   generate_enum<ipc::SystemState>();
 
   // ── Helper structs (not top-level messages) ────────────────────────────────

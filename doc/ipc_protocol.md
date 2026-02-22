@@ -60,7 +60,7 @@ flowchart LR
         KinematicsService(["KinematicsService<br/><br/>Simulates vehicle motion by<br/>integrating motor RPM over time to<br/>track position and linear velocity."])
         PowerService(["PowerService<br/><br/>Models a simple battery pack<br/>dynamically responding to motor<br/>load."])
         StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine of the simulation."])
-        LogService(["LogService<br/><br/>Periodically aggregates system<br/>state into human-readable text logs<br/>for debugging."])
+        LogService(["LogService<br/><br/>Asynchronous logging sink."])
         UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
         %% Bridge Distribution
         LogService -->|Log| UdpBridge
@@ -73,11 +73,9 @@ flowchart LR
         PowerService -->|PowerData| UdpBridge
         MotorService -.->|PhysicsTick| KinematicsService
         MotorService -.->|PhysicsTick| PowerService
-        MotorService -.->|PhysicsTick| LogService
         MotorService -.->|StateChange| KinematicsService
         MotorService -.->|StateChange| PowerService
         MotorService -.->|StateChange| StateService
-        MotorService -.->|StateChange| LogService
     end
 
     %% ─── INBOUND PATH ───
@@ -131,9 +129,9 @@ This component passively tracks the top-level simulated system state (Init, Read
 
 ### `LogService`
 
-> Periodically aggregates system state into human-readable text logs for debugging.
+> Asynchronous logging sink.
 
-It acts as an internal observer, keeping track of the latest kinematics, power, and state metrics, and broadcasts a formatted string representation at a fixed interval to track the simulation's progress.
+Collects LogPayloads into a queue and processes them on a background thread to avoid blocking simulation services.
 
 ### `UdpBridge`
 
@@ -164,7 +162,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Outbound`<br>
 **Publishes:** `LogService`<br>
-**Wire size:** 257 bytes
+**Wire size:** 288 bytes
 
 <table>
   <thead>
@@ -187,9 +185,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
     </tr>
     <tr>
       <td>component</td>
-      <td>ComponentId</td>
-      <td>ComponentId</td>
-      <td>1</td>
+      <td>char[32]</td>
+      <td>bytes</td>
+      <td>32</td>
       <td>256</td>
     </tr>
   </tbody>
@@ -465,7 +463,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `LogService`<br>
+**Subscribes:** `KinematicsService`, `PowerService`<br>
 **Wire size:** 10 bytes
 
 <table>
@@ -503,7 +501,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `StateService`, `LogService`<br>
+**Subscribes:** `KinematicsService`, `PowerService`, `StateService`<br>
 **Wire size:** 5 bytes
 
 <table>
