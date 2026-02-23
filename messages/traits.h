@@ -66,9 +66,9 @@ struct MessageTraits<MsgId::ThermalData> {
 };
 
 template <>
-struct MessageTraits<MsgId::EnvironmentCommand> {
-  using Payload = EnvironmentCommandPayload;
-  static constexpr std::string_view name = "EnvironmentCommand";
+struct MessageTraits<MsgId::EnvironmentAck> {
+  using Payload = EnvironmentAckPayload;
+  static constexpr std::string_view name = "EnvironmentAck";
 };
 template <>
 struct MessageTraits<MsgId::EnvironmentRequest> {
@@ -79,6 +79,17 @@ template <>
 struct MessageTraits<MsgId::EnvironmentData> {
   using Payload = EnvironmentPayload;
   static constexpr std::string_view name = "EnvironmentData";
+};
+
+template <>
+struct MessageTraits<MsgId::AutoDriveCommand> {
+  using Payload = AutoDriveCommandPayload;
+  static constexpr std::string_view name = "AutoDriveCommand";
+};
+template <>
+struct MessageTraits<MsgId::AutoDriveStatus> {
+  using Payload = AutoDriveStatusPayload;
+  static constexpr std::string_view name = "AutoDriveStatus";
 };
 
 template <>

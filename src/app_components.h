@@ -3,6 +3,7 @@
 #include <tuple>
 #include <type_traits>
 
+#include "services/autonomous_service.h"
 #include "services/environment_service.h"
 #include "services/kinematics_service.h"
 #include "services/log_service.h"
@@ -14,11 +15,23 @@
 
 namespace sil {
 
+/**
+ * @warning CRITICAL: DO NOT MODIFY THIS FILE OR THE AppServicesContainer.
+ *
+ * All services must conform to the standard constructor signature:
+ *   Service(ipc::MessageBus& bus)
+ *
+ * Inter-service communication should happen via the ipc::MessageBus to
+ * maintain loose coupling and allow for easier testing/extensibility.
+ * Manual wiring of dependencies is strictly prohibited.
+ */
+
 // A compile-time list of all services instantiated by the main application.
 // This is used by the documentation generator to automatically reflect over
 // the aggregate Subscribes/Publishes traits of the entire application.
-using AppServices = std::tuple<MotorService, KinematicsService, PowerService, StateService,
-                               ThermalService, EnvironmentService, LogService, ipc::UdpBridge>;
+using AppServices =
+    std::tuple<MotorService, KinematicsService, PowerService, StateService, ThermalService,
+               EnvironmentService, AutonomousService, LogService, ipc::UdpBridge>;
 
 template <typename... Ts>
 struct AppServicesContainer {

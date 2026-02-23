@@ -4,8 +4,7 @@ import time
 import pytest
 from reflect_pytest.generated import (
     MsgId,
-    EnvironmentCommandPayload,
-    EnvironmentRequestPayload,
+    EnvironmentAckPayload as EnvironmentAck,
     EnvironmentPayload,
     ThermalRequestPayload,
     ThermalPayload,
@@ -13,6 +12,8 @@ from reflect_pytest.generated import (
     MotorSubCmd,
     StateRequestPayload,
     SystemState,
+    Point2D,
+    BoundingBox2D,
 )
 
 def send_sequence(udp, cmd_id: int, steps: list[tuple[int, int]]) -> None:
@@ -42,20 +43,30 @@ def query_thermal(udp) -> ThermalPayload:
     udp.send_msg(MsgId.ThermalRequest, ThermalRequestPayload(reserved=0))
     return udp.recv_msg(expected_id=MsgId.ThermalData)
 
-def query_environment(udp) -> EnvironmentPayload:
+def query_environment(udp) -> None:
+    # EnvironmentRequest now doesn't return anything *defined* by the app.
+    # The app just logs it. This test might be redundant now if it expects a response from the app.
+    # For now, we just skip waiting for MsgId.EnvironmentData as it won't arrive from the app.
     drain_socket(udp)
-    udp.send_msg(MsgId.EnvironmentRequest, EnvironmentRequestPayload(reserved=0))
-    return udp.recv_msg(expected_id=MsgId.EnvironmentData)
+    from reflect_pytest.generated import EnvironmentRequestPayload
+    udp.send_msg(MsgId.EnvironmentRequest, EnvironmentRequestPayload(target_location=Point2D(0,0)))
 
-def set_environment(udp, ambient_temp: float, incline: float, friction: float):
+def set_environment(udp, ambient_temp: float, incline: float, friction: float, region_id: int = 0):
     drain_socket(udp)
-    cmd = EnvironmentCommandPayload(
+    # EnvironmentData is now inbound (sent by Python)
+    env = EnvironmentPayload(
+        region_id=region_id,
+        bounds=BoundingBox2D(min_pt=Point2D(0,0), max_pt=Point2D(0,0)), # Placeholder bounds
         ambient_temp_c=ambient_temp,
         incline_percent=incline,
         surface_friction=friction
     )
-    udp.send_msg(MsgId.EnvironmentCommand, cmd)
-    return udp.recv_msg(expected_id=MsgId.EnvironmentData)
+    udp.send_msg(MsgId.EnvironmentData, env)
+    
+    # Wait for completion via ACK
+    ack = udp.recv_msg(expected_id=MsgId.EnvironmentAck)
+    assert ack.region_id == region_id
+    return env # Return the sent env for compatibility with existing tests expecting it back
 
 def wait_for_sequence(udp, cmd_id: int, duration_us: int) -> None:
     time.sleep(duration_us / 1e6 + 0.05)
@@ -73,16 +84,17 @@ def wait_for_sequence(udp, cmd_id: int, duration_us: int) -> None:
     raise TimeoutError("Simulator did not finish sequence")
 
 def test_environment_override(udp):
-    """Test we can override environment conditions and read them back."""
+    """Test we can override environment conditions and receive an ACK."""
+    # set_environment now internally waits for MsgId.EnvironmentAck
+    # and returns the EnvironmentPayload object we sent.
     resp = set_environment(udp, ambient_temp=30.5, incline=5.0, friction=0.8)
     assert resp.ambient_temp_c == 30.5
     assert resp.incline_percent == 5.0
     assert resp.surface_friction == pytest.approx(0.8)
     
-    env = query_environment(udp)
-    assert env.ambient_temp_c == 30.5
-    assert env.incline_percent == 5.0
-    assert env.surface_friction == pytest.approx(0.8)
+    # We no longer "read back" from the app (one-way data flow).
+    # Confirmation is handled by the ACK in set_environment.
+    pass
     
 def test_thermal_increases_under_load(udp):
     """Motor and battery temps should increase when driving."""

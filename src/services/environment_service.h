@@ -10,32 +10,28 @@ namespace sil {
 
 class DOC_DESC("Environment Service") EnvironmentService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::EnvironmentCommand, ipc::MsgId::EnvironmentRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::EnvironmentData>;
+  using Subscribes = ipc::MsgList<ipc::MsgId::EnvironmentData, ipc::MsgId::EnvironmentRequest>;
+  using Publishes = ipc::MsgList<ipc::MsgId::EnvironmentAck>;
 
   explicit EnvironmentService(ipc::MessageBus& bus) : bus_(bus), logger_("env") {
     ipc::bind_subscriptions(bus_, this);
   }
 
-  void on_message(const ipc::EnvironmentCommandPayload& cmd) {
+  void on_message(const ipc::EnvironmentPayload& env) {
     std::lock_guard lk{mu_};
-    env_.ambient_temp_c = cmd.ambient_temp_c;
-    env_.incline_percent = cmd.incline_percent;
-    env_.surface_friction = cmd.surface_friction;
+    env_ = env;
 
-    // Broadcast newly applied environment conditions
-    bus_.publish<ipc::MsgId::EnvironmentData>(env_);
-    logger_.info("Environment updated: Temp %.1fC, Incline %.1f%%, Friction %.2f",
-                 env_.ambient_temp_c, env_.incline_percent, env_.surface_friction);
+    logger_.info(
+        "Environment updated (inbound): region %u, Temp %.1fC, Incline %.1f%%, Friction %.2f",
+        env.region_id, env.ambient_temp_c, env.incline_percent, env.surface_friction);
+
+    // ACK receipt of the data
+    bus_.publish<ipc::MsgId::EnvironmentAck>(ipc::EnvironmentAckPayload{env.region_id});
   }
 
-  void on_message(const ipc::EnvironmentRequestPayload&) {
-    ipc::EnvironmentPayload p;
-    {
-      std::lock_guard lk{mu_};
-      p = env_;
-    }
-    bus_.publish<ipc::MsgId::EnvironmentData>(p);
+  void on_message(const ipc::EnvironmentRequestPayload& req) {
+    logger_.info("Environment request for (%.1f, %.1f) - expectation is external responder.",
+                 req.target_location.x, req.target_location.y);
   }
 
  private:
@@ -43,7 +39,7 @@ class DOC_DESC("Environment Service") EnvironmentService {
   ComponentLogger logger_;
   std::mutex mu_;
 
-  ipc::EnvironmentPayload env_{20.0f, 0.0f, 1.0f};  // Defaults
+  ipc::EnvironmentPayload env_{0, {{0, 0}, {0, 0}}, 20.0f, 0.0f, 1.0f};  // Defaults
 };
 
 }  // namespace sil

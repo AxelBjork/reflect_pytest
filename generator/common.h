@@ -120,7 +120,7 @@ template <typename T>
 std::string get_python_type_name() {
   std::string s = get_cxx_type_name<T>();
   for (char& c : s) {
-    if (c == '<' || c == '>' || c == ',' || c == ' ') c = '_';
+    if (c == '<' || c == '>' || c == ',' || c == ' ' || c == ':') c = '_';
   }
   while (!s.empty() && s.back() == '_') s.pop_back();
   return s;

@@ -41,7 +41,7 @@ class UdpClient:
         self._sock.sendto(msg_id_bytes + payload_bytes, self._bridge)
         print(f"[UDP TX] {msg_id.name}: {payload}")
 
-    def recv_msg(self, expected_id: MsgId = None):
+    def recv_msg(self, expected_id: MsgId = None, verbose: bool = True):
         """Block until matching Message arrives (or timeout raises)."""
         while True:
             data, _ = self._sock.recvfrom(4096)
@@ -66,7 +66,8 @@ class UdpClient:
                 # We strip the 2-byte msgId header to unpack the payload
                 payload_class = MESSAGE_BY_ID[msg_enum]
                 payload_obj = payload_class.unpack_wire(data[2:])
-                print(f"[UDP RX] {msg_enum.name}: {payload_obj}")
+                if verbose:
+                    print(f"[UDP RX] {msg_enum.name}: {payload_obj}")
                 return payload_obj
             except struct.error:
                 continue

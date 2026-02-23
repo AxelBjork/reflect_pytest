@@ -10,6 +10,7 @@ int main() {
   generate_enum<ipc::MsgId>();
   generate_enum<ipc::Severity>();
   generate_enum<ipc::SystemState>();
+  generate_enum<ipc::DriveMode>();
 
   // ── Helper structs (not top-level messages) ────────────────────────────────
   std::set<std::string> visited;

@@ -63,9 +63,11 @@ enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is
   PowerData,           // C++ -> Python: power snapshot response
   ThermalRequest,      // Python -> C++: query thermal state (1-byte request)
   ThermalData,         // C++ -> Python: thermal snapshot response
-  EnvironmentCommand,  // Python -> C++: set external environmental conditions
+  EnvironmentAck,      // C++ -> Python: confirm receipt of environment data
   EnvironmentRequest,  // Python -> C++: query active environment state (1-byte request)
-  EnvironmentData,     // C++ -> Python: environment snapshot response
+  EnvironmentData,     // Python -> C++: delivery of environmental conditions
+  AutoDriveCommand,    // Python -> C++: complex autonomous driving route
+  AutoDriveStatus,     // C++ -> Python: execution status and efficiency metrics
 
   // -- Internal Component IPC --
   PhysicsTick,   // Motor -> Others: 100Hz tick with RPM and dt_us
@@ -154,10 +156,29 @@ struct DOC_DESC(
   uint8_t reserved;
 };
 
-struct DOC_DESC(
-    "One-byte sentinel. Send to request an EnvironmentData snapshot. The payload value is ignored.")
-    EnvironmentRequestPayload {
-  uint8_t reserved;
+// --- Basic Types ---
+struct DOC_DESC("A 2D coordinate.") Point2D {
+  float x;
+  float y;
+};
+
+struct DOC_DESC("An axis-aligned 2D bounding box.") BoundingBox2D {
+  Point2D min_pt;
+  Point2D max_pt;
+};
+
+struct DOC_DESC("A 3D coordinate vector.") Vector3 {
+  float x;
+  float y;
+  float z;
+};
+
+struct DOC_DESC("Environment ID Wrapper.") EnvId {
+  uint32_t id;
+};
+
+struct DOC_DESC("Request conditions for a specific location.") EnvironmentRequestPayload {
+  Point2D target_location;
 };
 
 // Kinematics snapshot — position integrated from sequence start.
@@ -186,20 +207,72 @@ struct DOC_DESC("Thermal snapshot sent in response to a ThermalRequest. "
   float battery_temp_c;
 };
 
-// Environment command.
-struct DOC_DESC("Environment factors sent from Python to override simulation ambient conditions.")
-    EnvironmentCommandPayload {
+// Environment ACK.
+struct DOC_DESC("ACK sent by the application when it accepts new environment data.")
+    EnvironmentAckPayload {
+  uint32_t region_id;
+};
+
+// Environment snapshot (inbound).
+struct DOC_DESC("Environmental conditions delivered to the application from the outside world.")
+    EnvironmentPayload {
+  uint32_t region_id;
+  BoundingBox2D bounds;  // 2D plane where these conditions are valid
   float ambient_temp_c;
   float incline_percent;
   float surface_friction;
 };
 
-// Environment snapshot.
-struct DOC_DESC("Active environment conditions applied to the simulation.") EnvironmentPayload {
-  float ambient_temp_c;
-  float incline_percent;
-  float surface_friction;
+// --- AutoDrive Structs ---
+enum class DOC_DESC("Control strategy for the autonomous service.") DriveMode : uint8_t {
+  Eco,
+  Performance,
+  ManualTuning
 };
+
+struct DOC_DESC("A single target maneuver point.") ManeuverNode {
+  Point2D target_pos;
+  int16_t speed_limit_rpm;
+  uint16_t timeout_ms;
+};
+
+template <std::size_t MaxNodes>
+struct DOC_DESC("High level autonomous driving route and configuration.") AutoDriveCommandTemplate {
+  char route_name[32];
+  DriveMode mode;
+  float p_gain;  // Only used if mode == ManualTuning
+  bool use_environment_tuning;
+  std::array<Vector3, 3> route_transform;
+  uint8_t num_nodes;
+  std::array<ManeuverNode, MaxNodes> route;
+};
+
+using AutoDriveCommandPayload = AutoDriveCommandTemplate<8>;
+
+struct DOC_DESC("Efficiency metrics for a single traveled node.") ManeuverStats {
+  float initial_energy_mj;
+  float final_energy_mj;
+  float energy_per_meter_mj;
+  float total_energy_used_mj;
+};
+
+template <std::size_t MaxNodes, std::size_t MaxEnvs>
+struct DOC_DESC("Status and efficiency report from the AutonomousService.")
+    AutoDriveStatusTemplate {
+  uint32_t cmd_id;
+  uint8_t current_node_idx;
+  bool route_complete;
+
+  // Stats per node
+  uint8_t num_stats;
+  std::array<ManeuverStats, MaxNodes> node_stats;
+
+  // Environment tracking
+  uint8_t num_environments_used;
+  std::array<EnvId, MaxEnvs> environment_ids;
+};
+
+using AutoDriveStatusPayload = AutoDriveStatusTemplate<8, 4>;
 
 // ── Internal Component IPC ───────────────────────────────────────────────────
 

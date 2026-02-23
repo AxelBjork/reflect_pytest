@@ -121,6 +121,7 @@ void generate_struct(std::set<std::string>& visited) {
   if (desc.text[0] != '\0') {
     std::cout << "    \"\"\"" << desc.text << "\"\"\"\n";
   }
+  std::cout << "    WIRE_SIZE = " << sizeof(T) << "\n";
 
   std::string pack_args;
   std::string pack_fmt = "<";
@@ -219,9 +220,7 @@ void generate_struct(std::set<std::string>& visited) {
 
             unpack_instructions += "        " + field_name + " = []\n";
             unpack_instructions += "        for _ in range(" + std::to_string(N_elems) + "):\n";
-            unpack_instructions +=
-                "            sub_size = len(" + sub_type + "().pack_wire()) if hasattr(" +
-                sub_type + ", 'pack_wire') else struct.calcsize(" + sub_type + ".SUBCMD_FMT)\n";
+            unpack_instructions += "            sub_size = " + sub_type + ".WIRE_SIZE\n";
             unpack_instructions +=
                 "            item = " + sub_type + ".unpack_wire(data[offset:offset+sub_size])\n";
             unpack_instructions += "            " + field_name + ".append(item)\n";
@@ -260,9 +259,7 @@ void generate_struct(std::set<std::string>& visited) {
 
             unpack_instructions += "        " + field_name + " = []\n";
             unpack_instructions += "        for _ in range(" + std::to_string(N_elems) + "):\n";
-            unpack_instructions +=
-                "            sub_size = len(" + sub_type + "().pack_wire()) if hasattr(" +
-                sub_type + ", 'pack_wire') else struct.calcsize(" + sub_type + ".SUBCMD_FMT)\n";
+            unpack_instructions += "            sub_size = " + sub_type + ".WIRE_SIZE\n";
             unpack_instructions +=
                 "            item = " + sub_type + ".unpack_wire(data[offset:offset+sub_size])\n";
             unpack_instructions += "            " + field_name + ".append(item)\n";
@@ -273,9 +270,7 @@ void generate_struct(std::set<std::string>& visited) {
           std::string sub_type = get_python_type_name<FT>();
           pack_instructions += "        data.extend(self." + field_name + ".pack_wire())\n";
 
-          unpack_instructions +=
-              "        sub_size = len(" + sub_type + "().pack_wire()) if hasattr(" + sub_type +
-              ", 'pack_wire') else struct.calcsize(" + sub_type + ".SUBCMD_FMT)\n";
+          unpack_instructions += "        sub_size = " + sub_type + ".WIRE_SIZE\n";
           unpack_instructions += "        " + field_name + " = " + sub_type +
                                  ".unpack_wire(data[offset:offset+sub_size])\n";
           unpack_instructions += "        offset += sub_size\n";

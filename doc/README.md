@@ -62,6 +62,7 @@ flowchart LR
         StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine of the simulation."])
         ThermalService(["ThermalService<br/><br/>Thermal Service"])
         EnvironmentService(["EnvironmentService<br/><br/>Environment Service"])
+        AutonomousService(["AutonomousService<br/><br/>High level autonomous driving<br/>service."])
         LogService(["LogService<br/><br/>Asynchronous logging sink."])
         UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
         %% Bridge Distribution
@@ -69,19 +70,31 @@ flowchart LR
         UdpBridge -->|StateRequest| StateService
         StateService -->|StateData| UdpBridge
         UdpBridge -->|MotorSequence| MotorService
+        AutonomousService -->|MotorSequence| UdpBridge
         UdpBridge -->|KinematicsRequest| KinematicsService
+        AutonomousService -->|KinematicsRequest| UdpBridge
+        UdpBridge -->|KinematicsData| AutonomousService
         KinematicsService -->|KinematicsData| UdpBridge
         UdpBridge -->|PowerRequest| PowerService
+        AutonomousService -->|PowerRequest| UdpBridge
+        UdpBridge -->|PowerData| AutonomousService
         PowerService -->|PowerData| UdpBridge
         UdpBridge -->|ThermalRequest| ThermalService
         ThermalService -->|ThermalData| UdpBridge
-        UdpBridge -->|EnvironmentCommand| EnvironmentService
+        EnvironmentService -->|EnvironmentAck| UdpBridge
         UdpBridge -->|EnvironmentRequest| EnvironmentService
+        AutonomousService -->|EnvironmentRequest| UdpBridge
         UdpBridge -->|EnvironmentData| ThermalService
-        EnvironmentService -->|EnvironmentData| UdpBridge
+
+        UdpBridge -->|EnvironmentData| EnvironmentService
+
+        UdpBridge -->|EnvironmentData| AutonomousService
+        UdpBridge -->|AutoDriveCommand| AutonomousService
+        AutonomousService -->|AutoDriveStatus| UdpBridge
         MotorService -.->|PhysicsTick| KinematicsService
         MotorService -.->|PhysicsTick| PowerService
         MotorService -.->|PhysicsTick| ThermalService
+        MotorService -.->|PhysicsTick| AutonomousService
         MotorService -.->|StateChange| KinematicsService
         MotorService -.->|StateChange| PowerService
         MotorService -.->|StateChange| StateService
@@ -94,10 +107,10 @@ flowchart LR
 
     %% ─── INBOUND PATH ───
     TestCase -->|send_msg| TX
-    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest<br/>ThermalRequest<br/>EnvironmentCommand<br/>EnvironmentRequest<br/>EnvironmentData<br/>ResetRequest"| UdpBridge
+    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>KinematicsData<br/>PowerRequest<br/>PowerData<br/>ThermalRequest<br/>EnvironmentRequest<br/>EnvironmentData<br/>AutoDriveCommand<br/>ResetRequest"| UdpBridge
 
     %% ─── OUTBOUND PATH ───
-    UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData<br/>ThermalData<br/>EnvironmentData"| RX
+    UdpBridge -->|"Log<br/>StateData<br/>MotorSequence<br/>KinematicsRequest<br/>KinematicsData<br/>PowerRequest<br/>PowerData<br/>ThermalData<br/>EnvironmentAck<br/>EnvironmentRequest<br/>AutoDriveStatus"| RX
     RX -->|recv_msg| TestCase
 ```
 
@@ -149,6 +162,10 @@ This component passively tracks the top-level simulated system state (Init, Read
 
 > Environment Service
 
+### `AutonomousService`
+
+> High level autonomous driving service.
+
 ### `LogService`
 
 > Asynchronous logging sink.
@@ -175,9 +192,11 @@ It remembers the IP address and port of the last connected test harness and bidi
 - [`PowerData`](#msgidpowerdata-powerpayload)
 - [`ThermalRequest`](#msgidthermalrequest-thermalrequestpayload)
 - [`ThermalData`](#msgidthermaldata-thermalpayload)
-- [`EnvironmentCommand`](#msgidenvironmentcommand-environmentcommandpayload)
+- [`EnvironmentAck`](#msgidenvironmentack-environmentackpayload)
 - [`EnvironmentRequest`](#msgidenvironmentrequest-environmentrequestpayload)
 - [`EnvironmentData`](#msgidenvironmentdata-environmentpayload)
+- [`AutoDriveCommand`](#msgidautodrivecommand-autodrivecommandtemplate<8>)
+- [`AutoDriveStatus`](#msgidautodrivestatus-autodrivestatustemplate<8, 4>)
 - [`PhysicsTick`](#msgidphysicstick-physicstickpayload)
 - [`StateChange`](#msgidstatechange-statechangepayload)
 - [`ResetRequest`](#msgidresetrequest-resetrequestpayload)
@@ -271,7 +290,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence.
 
-**Direction:** `Inbound`<br>
+**Direction:** `Bidirectional`<br>
+**Publishes:** `AutonomousService`<br>
 **Subscribes:** `MotorService`<br>
 **Wire size:** 35 bytes
 
@@ -355,7 +375,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > One-byte sentinel. Send to request a KinematicsData snapshot. The payload value is ignored.
 
-**Direction:** `Inbound`<br>
+**Direction:** `Bidirectional`<br>
+**Publishes:** `AutonomousService`<br>
 **Subscribes:** `KinematicsService`<br>
 **Wire size:** 1 bytes
 
@@ -378,8 +399,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Kinematics snapshot sent in response to a KinematicsRequest. Reflects physics state integrated since the start of the current sequence.
 
-**Direction:** `Outbound`<br>
+**Direction:** `Bidirectional`<br>
 **Publishes:** `KinematicsService`<br>
+**Subscribes:** `AutonomousService`<br>
 **Wire size:** 16 bytes
 
 <table>
@@ -422,7 +444,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > One-byte sentinel. Send to request a PowerData snapshot. The payload value is ignored.
 
-**Direction:** `Inbound`<br>
+**Direction:** `Bidirectional`<br>
+**Publishes:** `AutonomousService`<br>
 **Subscribes:** `PowerService`<br>
 **Wire size:** 1 bytes
 
@@ -445,8 +468,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Power-model snapshot sent in response to a PowerRequest. Models a simple battery with internal resistance drain.
 
-**Direction:** `Outbound`<br>
+**Direction:** `Bidirectional`<br>
 **Publishes:** `PowerService`<br>
+**Subscribes:** `AutonomousService`<br>
 **Wire size:** 13 bytes
 
 <table>
@@ -538,13 +562,13 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
-### `MsgId::EnvironmentCommand` (`EnvironmentCommandPayload`)
+### `MsgId::EnvironmentAck` (`EnvironmentAckPayload`)
 
-> Environment factors sent from Python to override simulation ambient conditions.
+> ACK sent by the application when it accepts new environment data.
 
-**Direction:** `Inbound`<br>
-**Subscribes:** `EnvironmentService`<br>
-**Wire size:** 12 bytes
+**Direction:** `Outbound`<br>
+**Publishes:** `EnvironmentService`<br>
+**Wire size:** 4 bytes
 
 <table>
   <thead>
@@ -552,36 +576,23 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </thead>
   <tbody>
     <tr>
-      <td>ambient_temp_c</td>
-      <td>float</td>
-      <td>float</td>
+      <td>region_id</td>
+      <td>uint32_t</td>
+      <td>int</td>
       <td>4</td>
       <td>0</td>
-    </tr>
-    <tr>
-      <td>incline_percent</td>
-      <td>float</td>
-      <td>float</td>
-      <td>4</td>
-      <td>4</td>
-    </tr>
-    <tr>
-      <td>surface_friction</td>
-      <td>float</td>
-      <td>float</td>
-      <td>4</td>
-      <td>8</td>
     </tr>
   </tbody>
 </table>
 
 ### `MsgId::EnvironmentRequest` (`EnvironmentRequestPayload`)
 
-> One-byte sentinel. Send to request an EnvironmentData snapshot. The payload value is ignored.
+> Request conditions for a specific location.
 
-**Direction:** `Inbound`<br>
+**Direction:** `Bidirectional`<br>
+**Publishes:** `AutonomousService`<br>
 **Subscribes:** `EnvironmentService`<br>
-**Wire size:** 1 bytes
+**Wire size:** 8 bytes
 
 <table>
   <thead>
@@ -589,22 +600,238 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </thead>
   <tbody>
     <tr>
-      <td>reserved</td>
-      <td>uint8_t</td>
-      <td>int</td>
-      <td>1</td>
+      <td>target_location</td>
+      <td>Point2D</td>
+      <td>Any</td>
+      <td>8</td>
       <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `Point2D`
+
+> A 2D coordinate.
+
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>x</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>y</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
     </tr>
   </tbody>
 </table>
 
 ### `MsgId::EnvironmentData` (`EnvironmentPayload`)
 
-> Active environment conditions applied to the simulation.
+> Environmental conditions delivered to the application from the outside world.
 
-**Direction:** `Bidirectional`<br>
-**Publishes:** `EnvironmentService`<br>
-**Subscribes:** `ThermalService`<br>
+**Direction:** `Inbound`<br>
+**Subscribes:** `ThermalService`, `EnvironmentService`, `AutonomousService`<br>
+**Wire size:** 32 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>region_id</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>bounds</td>
+      <td>BoundingBox2D</td>
+      <td>Any</td>
+      <td>16</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>ambient_temp_c</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>20</td>
+    </tr>
+    <tr>
+      <td>incline_percent</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>24</td>
+    </tr>
+    <tr>
+      <td>surface_friction</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>28</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `BoundingBox2D`
+
+> An axis-aligned 2D bounding box.
+
+**Wire size:** 16 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>min_pt</td>
+      <td>Point2D</td>
+      <td>Any</td>
+      <td>8</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>max_pt</td>
+      <td>Point2D</td>
+      <td>Any</td>
+      <td>8</td>
+      <td>8</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `Point2D`
+
+> A 2D coordinate.
+
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>x</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>y</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::AutoDriveCommand` (`AutoDriveCommandTemplate<8>`)
+
+> High level autonomous driving route and configuration.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `AutonomousService`<br>
+**Wire size:** 171 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>route_name</td>
+      <td>char[32]</td>
+      <td>bytes</td>
+      <td>32</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>mode</td>
+      <td>DriveMode</td>
+      <td>DriveMode</td>
+      <td>1</td>
+      <td>32</td>
+    </tr>
+    <tr>
+      <td>p_gain</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>33</td>
+    </tr>
+    <tr>
+      <td>use_environment_tuning</td>
+      <td>bool</td>
+      <td>bool</td>
+      <td>1</td>
+      <td>37</td>
+    </tr>
+    <tr>
+      <td>route_transform</td>
+      <td>std::array<Vector3, 3></td>
+      <td>Any</td>
+      <td>36</td>
+      <td>38</td>
+    </tr>
+    <tr>
+      <td>num_nodes</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>74</td>
+    </tr>
+    <tr>
+      <td>route</td>
+      <td>std::array<ManeuverNode, 8></td>
+      <td>Any</td>
+      <td>96</td>
+      <td>75</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `std::array<Vector3, 3>`
+
+**Wire size:** 36 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>_M_elems</td>
+      <td>Vector3[3]</td>
+      <td>bytes</td>
+      <td>36</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `Vector3`
+
+> A 3D coordinate vector.
+
 **Wire size:** 12 bytes
 
 <table>
@@ -613,25 +840,273 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </thead>
   <tbody>
     <tr>
-      <td>ambient_temp_c</td>
+      <td>x</td>
       <td>float</td>
       <td>float</td>
       <td>4</td>
       <td>0</td>
     </tr>
     <tr>
-      <td>incline_percent</td>
+      <td>y</td>
       <td>float</td>
       <td>float</td>
       <td>4</td>
       <td>4</td>
     </tr>
     <tr>
-      <td>surface_friction</td>
+      <td>z</td>
       <td>float</td>
       <td>float</td>
       <td>4</td>
       <td>8</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `std::array<ManeuverNode, 8>`
+
+**Wire size:** 96 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>_M_elems</td>
+      <td>ManeuverNode[8]</td>
+      <td>bytes</td>
+      <td>96</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `ManeuverNode`
+
+> A single target maneuver point.
+
+**Wire size:** 12 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>target_pos</td>
+      <td>Point2D</td>
+      <td>Any</td>
+      <td>8</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>speed_limit_rpm</td>
+      <td>int16_t</td>
+      <td>int</td>
+      <td>2</td>
+      <td>8</td>
+    </tr>
+    <tr>
+      <td>timeout_ms</td>
+      <td>uint16_t</td>
+      <td>int</td>
+      <td>2</td>
+      <td>10</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `Point2D`
+
+> A 2D coordinate.
+
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>x</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>y</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::AutoDriveStatus` (`AutoDriveStatusTemplate<8, 4>`)
+
+> Status and efficiency report from the AutonomousService.
+
+**Direction:** `Outbound`<br>
+**Publishes:** `AutonomousService`<br>
+**Wire size:** 152 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cmd_id</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>current_node_idx</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>route_complete</td>
+      <td>bool</td>
+      <td>bool</td>
+      <td>1</td>
+      <td>5</td>
+    </tr>
+    <tr>
+      <td>num_stats</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <td>node_stats</td>
+      <td>std::array<ManeuverStats, 8></td>
+      <td>Any</td>
+      <td>128</td>
+      <td>7</td>
+    </tr>
+    <tr>
+      <td>num_environments_used</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>135</td>
+    </tr>
+    <tr>
+      <td>environment_ids</td>
+      <td>std::array<EnvId, 4></td>
+      <td>Any</td>
+      <td>16</td>
+      <td>136</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `std::array<ManeuverStats, 8>`
+
+**Wire size:** 128 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>_M_elems</td>
+      <td>ManeuverStats[8]</td>
+      <td>bytes</td>
+      <td>128</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `ManeuverStats`
+
+> Efficiency metrics for a single traveled node.
+
+**Wire size:** 16 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>initial_energy_mj</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>final_energy_mj</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>energy_per_meter_mj</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>8</td>
+    </tr>
+    <tr>
+      <td>total_energy_used_mj</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>12</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `std::array<EnvId, 4>`
+
+**Wire size:** 16 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>_M_elems</td>
+      <td>EnvId[4]</td>
+      <td>bytes</td>
+      <td>16</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `EnvId`
+
+> Environment ID Wrapper.
+
+**Wire size:** 4 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>id</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>0</td>
     </tr>
   </tbody>
 </table>
@@ -642,7 +1117,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `ThermalService`<br>
+**Subscribes:** `KinematicsService`, `PowerService`, `ThermalService`, `AutonomousService`<br>
 **Wire size:** 10 bytes
 
 <table>
