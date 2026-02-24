@@ -1,45 +1,44 @@
 #pragma once
+#include <chrono>
+#include <memory>
 #include <mutex>
+#include <vector>
 
 #include "component.h"
 #include "component_logger.h"
+#include "internal_messages.h"
 #include "message_bus.h"
 #include "messages.h"
 
 namespace sil {
 
-class DOC_DESC("Environment Service") EnvironmentService {
+class DOC_DESC(
+    "Centralized service for managing environmental simulation data.\n\n"
+    "It maintains a spatial cache of environmental regions (temperature, incline, friction) "
+    "and provides efficient, lifetime-tracked access to this data via in-process bus messages. "
+    "By publishing InternalEnvData messages containing std::shared_ptr, it allows consumers "
+    "like AutonomousService to access stable map regions without data copying or direct component "
+    "coupling.") EnvironmentService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::EnvironmentData, ipc::MsgId::EnvironmentRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::EnvironmentAck>;
+  using Subscribes = ipc::MsgList<ipc::MsgId::EnvironmentData, ipc::MsgId::ResetRequest,
+                                  ipc::MsgId::InternalEnvRequest, ipc::MsgId::EnvironmentRequest>;
+  using Publishes = ipc::MsgList<ipc::MsgId::EnvironmentAck, ipc::MsgId::EnvironmentRequest,
+                                 ipc::MsgId::InternalEnvData>;
 
-  explicit EnvironmentService(ipc::MessageBus& bus) : bus_(bus), logger_("env") {
-    ipc::bind_subscriptions(bus_, this);
-  }
+  explicit EnvironmentService(ipc::MessageBus& bus);
 
-  void on_message(const ipc::EnvironmentPayload& env) {
-    std::lock_guard lk{mu_};
-    env_ = env;
-
-    logger_.info(
-        "Environment updated (inbound): region %u, Temp %.1fC, Incline %.1f%%, Friction %.2f",
-        env.region_id, env.ambient_temp_c, env.incline_percent, env.surface_friction);
-
-    // ACK receipt of the data
-    bus_.publish<ipc::MsgId::EnvironmentAck>(ipc::EnvironmentAckPayload{env.region_id});
-  }
-
-  void on_message(const ipc::EnvironmentRequestPayload& req) {
-    logger_.info("Environment request for (%.1f, %.1f) - expectation is external responder.",
-                 req.target_location.x, req.target_location.y);
-  }
+  void on_message(const ipc::EnvironmentPayload& env);
+  void on_message(const ipc::EnvironmentRequestPayload& req);
+  void on_message(const ipc::ResetRequestPayload& req);
+  void on_message(const ipc::InternalEnvRequestPayload& req);
 
  private:
   ipc::MessageBus& bus_;
   ComponentLogger logger_;
-  std::mutex mu_;
+  std::recursive_mutex mu_;
 
-  ipc::EnvironmentPayload env_{0, {{0, 0}, {0, 0}}, 20.0f, 0.0f, 1.0f};  // Defaults
+  std::vector<std::shared_ptr<ipc::EnvironmentPayload>> cache_;
+  std::chrono::steady_clock::time_point last_request_time_{};
 };
 
 }  // namespace sil

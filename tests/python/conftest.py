@@ -219,6 +219,9 @@ def udp(sil_process):
 @pytest.fixture(scope="function", autouse=True)
 def reset_sim(udp):
     """Automatically reset simulation state before every test."""
+    udp.drain()
     udp.send_msg(MsgId.ResetRequest, ResetRequestPayload(reserved=0))
     # Tiny sleep to ensure C++ processes it before the next command
-    time.sleep(0.001)
+    # and to allow any last-second messages to arrive and be drained
+    time.sleep(0.01)
+    udp.drain()

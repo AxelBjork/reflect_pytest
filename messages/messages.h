@@ -68,11 +68,15 @@ enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is
   EnvironmentData,     // Python -> C++: delivery of environmental conditions
   AutoDriveCommand,    // Python -> C++: complex autonomous driving route
   AutoDriveStatus,     // C++ -> Python: execution status and efficiency metrics
+  MotorStatus,         // Motor -> State: periodic RPM update
 
   // -- Internal Component IPC --
   PhysicsTick,   // Motor -> Others: 100Hz tick with RPM and dt_us
   StateChange,   // Motor -> Others: SystemState transition
   ResetRequest,  // Python -> C++: Reset all physics state
+
+  InternalEnvRequest,  // Internal: Request pointer to environment data
+  InternalEnvData,     // Internal: Shared pointer to environment data
 };
 
 // ── Supporting enums ─────────────────────────────────────────────────────────
@@ -287,6 +291,13 @@ struct DOC_DESC("Internal IPC: Broadcast when moving into or out of Executing st
     StateChangePayload {
   SystemState state;
   uint32_t cmd_id;
+};
+
+struct DOC_DESC("Internal IPC: Periodic RPM and activity update from MotorService.")
+    MotorStatusPayload {
+  uint32_t cmd_id;
+  int16_t speed_rpm;
+  bool is_active;
 };
 
 #pragma pack(pop)

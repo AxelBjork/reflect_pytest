@@ -1,7 +1,7 @@
 [tool.pytest.ini_options]
 testpaths  = ["tests/python"]
 pythonpath = ["python"]
-addopts    = "-p no:cov -p no:xdist"
+addopts    = "-p no:cov -p no:xdist --timeout=2 --maxfail=2"
 
 [tool.flake8]
 max-line-length = 100

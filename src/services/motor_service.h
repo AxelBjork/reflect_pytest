@@ -11,34 +11,36 @@
 namespace sil {
 
 class DOC_DESC(
-    "Manages the thread that executes timed motor commands in real-time.\n\n"
-    "This service is responsible for stepping through a sequence of motor commands, "
-    "emitting standard `PhysicsTick` events at 100Hz, and broadcasting `StateChange` "
-    "events when a sequence starts or finishes.") MotorService {
+    "Reactive service that executes motor command sequences.\n\n"
+    "This service is responsible for stepping through a sequence of motor commands "
+    "in response to `PhysicsTick` events, and reporting its status via `MotorStatus` messages.")
+    MotorService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::MotorSequence>;
-  using Publishes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::StateChange>;
+  using Subscribes =
+      ipc::MsgList<ipc::MsgId::MotorSequence, ipc::MsgId::PhysicsTick, ipc::MsgId::ResetRequest>;
+  using Publishes = ipc::MsgList<ipc::MsgId::StateChange, ipc::MsgId::MotorStatus>;
 
   explicit MotorService(ipc::MessageBus& bus);
-  ~MotorService();
+  ~MotorService() = default;
 
   MotorService(const MotorService&) = delete;
   MotorService& operator=(const MotorService&) = delete;
 
   void on_message(const ipc::MotorSequencePayload& cmd);
+  void on_message(const ipc::PhysicsTickPayload& tick);
+  void on_message(const ipc::ResetRequestPayload& msg);
 
  private:
   ipc::TypedPublisher<MotorService> bus_;
   ComponentLogger logger_;
   std::mutex mu_;
-  std::condition_variable cv_;
-  std::thread exec_thread_;
-  std::atomic<bool> running_{true};
 
-  bool have_cmd_{false};
-  ipc::MotorSequencePayload pending_cmd_{};
+  bool active_{false};
+  ipc::MotorSequencePayload current_cmd_{};
+  uint8_t current_step_idx_{0};
+  uint32_t step_remaining_us_{0};
 
-  void exec_loop();
+  void advance_step();
 };
 
 }  // namespace sil

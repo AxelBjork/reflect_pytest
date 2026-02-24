@@ -35,15 +35,27 @@ struct IsInList<Target, MsgList<Ids...>> : MsgContains<Target, Ids...> {};
 template <MsgId Target, typename List>
 constexpr bool is_in_list_v = IsInList<Target, List>::value;
 
+template <MsgId Id>
+consteval bool is_local_only() {
+  if constexpr (requires { MessageTraits<Id>::local_only; }) {
+    return MessageTraits<Id>::local_only;
+  }
+  return false;
+}
+
 template <typename Component, MsgId Id>
 void bind_one(MessageBus& bus, Component* c) {
-  bus.subscribe(Id, [c](RawMessage msg) {
-    using Payload = typename MessageTraits<Id>::Payload;
-    if (msg.payload.size() != sizeof(Payload)) return;
-    Payload p{};
-    std::memcpy(&p, msg.payload.data(), sizeof(p));
-    c->on_message(p);
-  });
+  if constexpr (is_local_only<Id>()) {
+    bus.subscribe_local<Id>([c](const auto& p) { c->on_message(p); });
+  } else {
+    bus.subscribe(Id, [c](RawMessage msg) {
+      using Payload = typename MessageTraits<Id>::Payload;
+      if (msg.payload.size() != sizeof(Payload)) return;
+      Payload p{};
+      std::memcpy(&p, msg.payload.data(), sizeof(p));
+      c->on_message(p);
+    });
+  }
 }
 
 template <typename Component, MsgId... Ids>

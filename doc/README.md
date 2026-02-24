@@ -56,12 +56,12 @@ flowchart LR
 
     %% ─── COLUMN 3: C++ SUT ───
     subgraph sim["Simulator"]
-        MotorService(["MotorService<br/><br/>Manages the thread that executes<br/>timed motor commands in real-time."])
+        MotorService(["MotorService<br/><br/>Reactive service that executes<br/>motor command sequences."])
         KinematicsService(["KinematicsService<br/><br/>Simulates vehicle motion by<br/>integrating motor RPM over time to<br/>track position and linear velocity."])
         PowerService(["PowerService<br/><br/>Models a simple battery pack<br/>dynamically responding to motor<br/>load."])
-        StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine of the simulation."])
+        StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine and the master<br/>simulation clock."])
         ThermalService(["ThermalService<br/><br/>Thermal Service"])
-        EnvironmentService(["EnvironmentService<br/><br/>Environment Service"])
+        EnvironmentService(["EnvironmentService<br/><br/>Centralized service for managing<br/>environmental simulation data."])
         AutonomousService(["AutonomousService<br/><br/>High level autonomous driving<br/>service."])
         LogService(["LogService<br/><br/>Asynchronous logging sink."])
         UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
@@ -83,34 +83,36 @@ flowchart LR
         ThermalService -->|ThermalData| UdpBridge
         EnvironmentService -->|EnvironmentAck| UdpBridge
         UdpBridge -->|EnvironmentRequest| EnvironmentService
-        AutonomousService -->|EnvironmentRequest| UdpBridge
+        EnvironmentService -->|EnvironmentRequest| UdpBridge
         UdpBridge -->|EnvironmentData| ThermalService
-
         UdpBridge -->|EnvironmentData| EnvironmentService
-
-        UdpBridge -->|EnvironmentData| AutonomousService
         UdpBridge -->|AutoDriveCommand| AutonomousService
         AutonomousService -->|AutoDriveStatus| UdpBridge
-        MotorService -.->|PhysicsTick| KinematicsService
-        MotorService -.->|PhysicsTick| PowerService
-        MotorService -.->|PhysicsTick| ThermalService
-        MotorService -.->|PhysicsTick| AutonomousService
+        MotorService -.->|MotorStatus| StateService
+        StateService -.->|PhysicsTick| MotorService
+        StateService -.->|PhysicsTick| KinematicsService
+        StateService -.->|PhysicsTick| PowerService
+        StateService -.->|PhysicsTick| ThermalService
+        StateService -.->|PhysicsTick| AutonomousService
         MotorService -.->|StateChange| KinematicsService
         MotorService -.->|StateChange| PowerService
         MotorService -.->|StateChange| StateService
+        UdpBridge -->|ResetRequest| MotorService
         UdpBridge -->|ResetRequest| KinematicsService
-
         UdpBridge -->|ResetRequest| PowerService
-
         UdpBridge -->|ResetRequest| ThermalService
+        UdpBridge -->|ResetRequest| EnvironmentService
+        UdpBridge -->|ResetRequest| AutonomousService
+        AutonomousService -.->|InternalEnvRequest| EnvironmentService
+        EnvironmentService -.->|InternalEnvData| AutonomousService
     end
 
     %% ─── INBOUND PATH ───
     TestCase -->|send_msg| TX
-    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>KinematicsData<br/>PowerRequest<br/>PowerData<br/>ThermalRequest<br/>EnvironmentRequest<br/>EnvironmentData<br/>AutoDriveCommand<br/>ResetRequest"| UdpBridge
+    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest<br/>ThermalRequest<br/>EnvironmentRequest<br/>EnvironmentData<br/>AutoDriveCommand<br/>ResetRequest"| UdpBridge
 
     %% ─── OUTBOUND PATH ───
-    UdpBridge -->|"Log<br/>StateData<br/>MotorSequence<br/>KinematicsRequest<br/>KinematicsData<br/>PowerRequest<br/>PowerData<br/>ThermalData<br/>EnvironmentAck<br/>EnvironmentRequest<br/>AutoDriveStatus"| RX
+    UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData<br/>ThermalData<br/>EnvironmentAck<br/>EnvironmentRequest<br/>AutoDriveStatus"| RX
     RX -->|recv_msg| TestCase
 ```
 
@@ -122,9 +124,9 @@ The application is composed of the following services:
 
 ### `MotorService`
 
-> Manages the thread that executes timed motor commands in real-time.
+> Reactive service that executes motor command sequences.
 
-This service is responsible for stepping through a sequence of motor commands, emitting standard `PhysicsTick` events at 100Hz, and broadcasting `StateChange` events when a sequence starts or finishes.
+This service is responsible for stepping through a sequence of motor commands in response to `PhysicsTick` events, and reporting its status via `MotorStatus` messages.
 
 ### `KinematicsService`
 
@@ -150,9 +152,9 @@ $$ SOC = \frac{V - V_{min}}{V_{max} - V_{min}} \times 100 $$
 
 ### `StateService`
 
-> Maintains the central lifecycle state machine of the simulation.
+> Maintains the central lifecycle state machine and the master simulation clock.
 
-This component passively tracks the top-level simulated system state (Init, Ready, Executing, Fault) by listening to internal state transitions and makes it available to external clients via ping requests.
+This component tracks the system state and generates the 100Hz `PhysicsTick` heartbeat that drives all other simulation services.
 
 ### `ThermalService`
 
@@ -160,7 +162,9 @@ This component passively tracks the top-level simulated system state (Init, Read
 
 ### `EnvironmentService`
 
-> Environment Service
+> Centralized service for managing environmental simulation data.
+
+It maintains a spatial cache of environmental regions (temperature, incline, friction) and provides efficient, lifetime-tracked access to this data via in-process bus messages. By publishing InternalEnvData messages containing std::shared_ptr, it allows consumers like AutonomousService to access stable map regions without data copying or direct component coupling.
 
 ### `AutonomousService`
 
@@ -197,9 +201,12 @@ It remembers the IP address and port of the last connected test harness and bidi
 - [`EnvironmentData`](#msgidenvironmentdata-environmentpayload)
 - [`AutoDriveCommand`](#msgidautodrivecommand-autodrivecommandtemplate<8>)
 - [`AutoDriveStatus`](#msgidautodrivestatus-autodrivestatustemplate<8, 4>)
+- [`MotorStatus`](#msgidmotorstatus-motorstatuspayload)
 - [`PhysicsTick`](#msgidphysicstick-physicstickpayload)
 - [`StateChange`](#msgidstatechange-statechangepayload)
 - [`ResetRequest`](#msgidresetrequest-resetrequestpayload)
+- [`InternalEnvRequest`](#msgidinternalenvrequest-internalenvrequestpayload)
+- [`InternalEnvData`](#msgidinternalenvdata-internalenvdatapayload)
 
 Each section corresponds to one `MsgId` enumerator. The **direction badge** shows which side initiates the message.
 
@@ -590,7 +597,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 > Request conditions for a specific location.
 
 **Direction:** `Bidirectional`<br>
-**Publishes:** `AutonomousService`<br>
+**Publishes:** `EnvironmentService`<br>
 **Subscribes:** `EnvironmentService`<br>
 **Wire size:** 8 bytes
 
@@ -642,7 +649,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 > Environmental conditions delivered to the application from the outside world.
 
 **Direction:** `Inbound`<br>
-**Subscribes:** `ThermalService`, `EnvironmentService`, `AutonomousService`<br>
+**Subscribes:** `ThermalService`, `EnvironmentService`<br>
 **Wire size:** 32 bytes
 
 <table>
@@ -1111,13 +1118,51 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+### `MsgId::MotorStatus` (`MotorStatusPayload`)
+
+> Internal IPC: Periodic RPM and activity update from MotorService.
+
+**Direction:** `Internal`<br>
+**Publishes:** `MotorService`<br>
+**Subscribes:** `StateService`<br>
+**Wire size:** 7 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cmd_id</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>speed_rpm</td>
+      <td>int16_t</td>
+      <td>int</td>
+      <td>2</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>is_active</td>
+      <td>bool</td>
+      <td>bool</td>
+      <td>1</td>
+      <td>6</td>
+    </tr>
+  </tbody>
+</table>
+
 ### `MsgId::PhysicsTick` (`PhysicsTickPayload`)
 
 > Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration.
 
 **Direction:** `Internal`<br>
-**Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `ThermalService`, `AutonomousService`<br>
+**Publishes:** `StateService`<br>
+**Subscribes:** `MotorService`, `KinematicsService`, `PowerService`, `ThermalService`, `AutonomousService`<br>
 **Wire size:** 10 bytes
 
 <table>
@@ -1185,7 +1230,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 > One-byte sentinel. Send to request a full physics reset.
 
 **Direction:** `Inbound`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `ThermalService`<br>
+**Subscribes:** `MotorService`, `KinematicsService`, `PowerService`, `ThermalService`, `EnvironmentService`, `AutonomousService`<br>
 **Wire size:** 1 bytes
 
 <table>
@@ -1202,6 +1247,63 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
     </tr>
   </tbody>
 </table>
+
+### `MsgId::InternalEnvRequest` (`InternalEnvRequestPayload`)
+
+**Direction:** `Internal`<br>
+**Publishes:** `AutonomousService`<br>
+**Subscribes:** `EnvironmentService`<br>
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>x</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>y</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+  </tbody>
+</table>
+
+### `MsgId::InternalEnvData` (`InternalEnvDataPayload`)
+
+**Direction:** `Internal`<br>
+**Publishes:** `EnvironmentService`<br>
+**Subscribes:** `AutonomousService`<br>
+**Wire size:** 16 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ptr</td>
+      <td>std::shared_ptr<const EnvironmentPayload></td>
+      <td>Any</td>
+      <td>16</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `std::shared_ptr<const EnvironmentPayload>`
+
+**Wire size:** 16 bytes
+
+_No fields._
 
 ---
 

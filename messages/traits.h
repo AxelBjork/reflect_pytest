@@ -6,6 +6,7 @@
 
 #include <string_view>
 
+#include "internal_messages.h"
 #include "messages.h"
 
 namespace ipc {
@@ -108,6 +109,27 @@ template <>
 struct MessageTraits<MsgId::ResetRequest> {
   using Payload = ResetRequestPayload;
   static constexpr std::string_view name = "ResetRequest";
+};
+
+template <>
+struct MessageTraits<MsgId::InternalEnvRequest> {
+  using Payload = InternalEnvRequestPayload;
+  static constexpr std::string_view name = "InternalEnvRequest";
+  static constexpr bool local_only = true;
+};
+
+template <>
+struct MessageTraits<MsgId::InternalEnvData> {
+  using Payload = InternalEnvDataPayload;
+  static constexpr std::string_view name = "InternalEnvData";
+  static constexpr bool local_only = true;
+};
+
+template <>
+struct MessageTraits<MsgId::MotorStatus> {
+  using Payload = MotorStatusPayload;
+  static constexpr std::string_view name = "MotorStatus";
+  static constexpr bool local_only = true;
 };
 
 }  // namespace ipc

@@ -435,17 +435,12 @@ void emit_md_payload_section_for_msg_id() {
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
 void mermaid_inbound_edges_impl(std::index_sequence<Is...>, std::string_view mname) {
-  bool first = true;
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
     if constexpr (component_subscribes<Comp, Id>()) {
       std::string cname = cpp_type_name_str<Comp>();
       if (cname != "UdpBridge") {
-        if (!first) {
-          std::cout << "\n        UdpBridge -->|" << mname << "| ";
-        }
-        std::cout << cname << "\n";
-        first = false;
+        std::cout << "        UdpBridge -->|" << mname << "| " << cname << "\n";
       }
     }
   }());
@@ -523,29 +518,29 @@ void emit_mermaid_edge_for_msg_id(std::string& inbound, std::string& outbound, b
     constexpr bool py_sub = py_subscribes<Components, mid>();
     constexpr bool py_pub = py_publishes<Components, mid>();
 
-    if (py_pub && cxx_sub && !cxx_pub && !py_sub) {
-      if (!first_in) inbound += "<br/>";
-      inbound += mname;
-      first_in = false;
-      std::cout << "        UdpBridge -->|" << mname << "| ";
-      mermaid_inbound_edges<Components, mid>(mname);
-    } else if (cxx_pub && py_sub && !py_pub && !cxx_sub) {
-      if (!first_out) outbound += "<br/>";
-      outbound += mname;
-      first_out = false;
-      mermaid_outbound_edges<Components, mid>(mname);
-    } else if ((py_pub || py_sub) && (cxx_pub || cxx_sub)) {
-      if (!first_in) inbound += "<br/>";
-      inbound += mname;
-      first_in = false;
-      std::cout << "        UdpBridge -->|" << mname << "| ";
-      mermaid_inbound_edges<Components, mid>(mname);
+    bool is_udp_active = (py_pub || py_sub);
+    bool is_cxx_active = (cxx_pub || cxx_sub);
 
-      if (!first_out) outbound += "<br/>";
-      outbound += mname;
-      first_out = false;
-      mermaid_outbound_edges<Components, mid>(mname);
-    } else if (!py_pub && !py_sub && cxx_pub && cxx_sub) {
+    if (is_udp_active && is_cxx_active) {
+      if (cxx_sub) {
+        mermaid_inbound_edges<Components, mid>(mname);
+      }
+      if (cxx_pub) {
+        mermaid_outbound_edges<Components, mid>(mname);
+      }
+
+      // Labels for the path between Python and UdpBridge
+      if (py_pub && cxx_sub) {
+        if (!first_in) inbound += "<br/>";
+        inbound += mname;
+        first_in = false;
+      }
+      if (py_sub && cxx_pub) {
+        if (!first_out) outbound += "<br/>";
+        outbound += mname;
+        first_out = false;
+      }
+    } else if (!is_udp_active && cxx_pub && cxx_sub) {
       mermaid_internal_edges<Components, mid>(mname);
     }
   }

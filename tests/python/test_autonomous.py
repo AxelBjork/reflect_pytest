@@ -81,7 +81,7 @@ def test_autonomous_service_phase2_environment(udp):
     # 1. Send initial environment for region 0 [0, 5]
     env0 = EnvironmentPayload(
         region_id=101,
-        bounds=BoundingBox2D(min_pt=Point2D(0,0), max_pt=Point2D(0.1,0)),
+        bounds=BoundingBox2D(min_pt=Point2D(0,0), max_pt=Point2D(1.0,1.0)),
         ambient_temp_c=25.0,
         incline_percent=0.0,
         surface_friction=1.0
@@ -100,7 +100,7 @@ def test_autonomous_service_phase2_environment(udp):
         route_transform=[Vector3(1,0,0), Vector3(0,1,0), Vector3(0,0,1)],
         num_nodes=1,
         route=[
-            ManeuverNode(target_pos=Point2D(x=0.2, y=0.0), speed_limit_rpm=400, timeout_ms=500)
+            ManeuverNode(target_pos=Point2D(x=2.0, y=0.0), speed_limit_rpm=400, timeout_ms=1000)
         ] + [ManeuverNode(Point2D(0,0),0,0)]*7
     )
     udp.send_msg(MsgId.AutoDriveCommand, cmd)
@@ -111,7 +111,7 @@ def test_autonomous_service_phase2_environment(udp):
     # Observe EnvironmentRequest
     start = time.time()
     req = None
-    while time.time() - start < 0.5:
+    while time.time() - start < 2.0:
         try:
             msg = udp.recv_msg(expected_id=MsgId.EnvironmentRequest, verbose=False)
             if msg:

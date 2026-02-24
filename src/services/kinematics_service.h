@@ -34,11 +34,8 @@ class DOC_DESC(
     position_m_ += speed_mps_ * dt_s;
     elapsed_us_ += tick.dt_us;
 
-    // Log every 100 ticks (approx 1s)
     static uint32_t count = 0;
-    if (++count % 100 == 0) {
-      logger_.info("Position: %.3fm, Speed: %.3fm/s", position_m_, speed_mps_);
-    }
+    logger_.info("Position: %.3fm, Speed: %.3fm/s", position_m_, speed_mps_);
   }
 
   void on_message(const ipc::StateChangePayload& sc) {
