@@ -40,81 +40,7 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module to orchestrate test cases, `Network` maps the transport layer across two explicit sockets (`Client -> App` and `App -> Client`), and `Simulator` processes the messages internally.
 
-```mermaid
-flowchart LR
-    %% ─── COLUMN 1: Pytest Test Harness ───
-    subgraph py["Pytest SIL Environment"]
-        TestCase(["Test Case / Fixtures"])
-    end
-
-    %% ─── COLUMN 2: Python UDP Client & Kernel Routing ───
-    subgraph net["UdpClient (127.0.0.1)"]
-        direction TB
-        TX(["TX Socket<br/>Port 9000<br/>==============<br/>(sendto)"])
-        RX(["RX Socket<br/>Port 9001<br/>==============<br/>(recvfrom)"])
-    end
-
-    %% ─── COLUMN 3: C++ SUT ───
-    subgraph sim["Simulator"]
-        MotorService(["MotorService<br/><br/>Reactive service that executes<br/>motor command sequences."])
-        KinematicsService(["KinematicsService<br/><br/>Simulates vehicle motion by<br/>integrating motor RPM over time to<br/>track position and linear velocity."])
-        PowerService(["PowerService<br/><br/>Models a simple battery pack<br/>dynamically responding to motor<br/>load."])
-        StateService(["StateService<br/><br/>Maintains the central lifecycle<br/>state machine and the master<br/>simulation clock."])
-        ThermalService(["ThermalService<br/><br/>Thermal Service"])
-        EnvironmentService(["EnvironmentService<br/><br/>Centralized service for managing<br/>environmental simulation data."])
-        AutonomousService(["AutonomousService<br/><br/>High level autonomous driving<br/>service."])
-        LogService(["LogService<br/><br/>Asynchronous logging sink."])
-        UdpBridge(["UdpBridge<br/><br/>Stateful bridge that relays IPC<br/>messages between the internal<br/>MessageBus and external UDP<br/>clients."])
-        %% Bridge Distribution
-        LogService -->|Log| UdpBridge
-        UdpBridge -->|StateRequest| StateService
-        StateService -->|StateData| UdpBridge
-        UdpBridge -->|MotorSequence| MotorService
-        AutonomousService -->|MotorSequence| UdpBridge
-        UdpBridge -->|KinematicsRequest| KinematicsService
-        AutonomousService -->|KinematicsRequest| UdpBridge
-        UdpBridge -->|KinematicsData| AutonomousService
-        KinematicsService -->|KinematicsData| UdpBridge
-        UdpBridge -->|PowerRequest| PowerService
-        AutonomousService -->|PowerRequest| UdpBridge
-        UdpBridge -->|PowerData| AutonomousService
-        PowerService -->|PowerData| UdpBridge
-        UdpBridge -->|ThermalRequest| ThermalService
-        ThermalService -->|ThermalData| UdpBridge
-        EnvironmentService -->|EnvironmentAck| UdpBridge
-        UdpBridge -->|EnvironmentRequest| EnvironmentService
-        EnvironmentService -->|EnvironmentRequest| UdpBridge
-        UdpBridge -->|EnvironmentData| ThermalService
-        UdpBridge -->|EnvironmentData| EnvironmentService
-        UdpBridge -->|AutoDriveCommand| AutonomousService
-        AutonomousService -->|AutoDriveStatus| UdpBridge
-        MotorService -.->|MotorStatus| StateService
-        StateService -.->|PhysicsTick| MotorService
-        StateService -.->|PhysicsTick| KinematicsService
-        StateService -.->|PhysicsTick| PowerService
-        StateService -.->|PhysicsTick| ThermalService
-        StateService -.->|PhysicsTick| AutonomousService
-        MotorService -.->|StateChange| KinematicsService
-        MotorService -.->|StateChange| PowerService
-        MotorService -.->|StateChange| StateService
-        UdpBridge -->|ResetRequest| MotorService
-        UdpBridge -->|ResetRequest| KinematicsService
-        UdpBridge -->|ResetRequest| PowerService
-        UdpBridge -->|ResetRequest| ThermalService
-        UdpBridge -->|ResetRequest| EnvironmentService
-        UdpBridge -->|ResetRequest| AutonomousService
-        AutonomousService -.->|InternalEnvRequest| EnvironmentService
-        EnvironmentService -.->|InternalEnvData| AutonomousService
-    end
-
-    %% ─── INBOUND PATH ───
-    TestCase -->|send_msg| TX
-    TX -->|"StateRequest<br/>MotorSequence<br/>KinematicsRequest<br/>PowerRequest<br/>ThermalRequest<br/>EnvironmentRequest<br/>EnvironmentData<br/>AutoDriveCommand<br/>ResetRequest"| UdpBridge
-
-    %% ─── OUTBOUND PATH ───
-    UdpBridge -->|"Log<br/>StateData<br/>KinematicsData<br/>PowerData<br/>ThermalData<br/>EnvironmentAck<br/>EnvironmentRequest<br/>AutoDriveStatus"| RX
-    RX -->|recv_msg| TestCase
-```
+![IPC Flow Diagram](ipc_flow.svg)
 
 ---
 
@@ -189,7 +115,7 @@ It remembers the IP address and port of the last connected test harness and bidi
 - [`Log`](#msgidlog-logpayload)
 - [`StateRequest`](#msgidstaterequest-staterequestpayload)
 - [`StateData`](#msgidstatedata-statepayload)
-- [`MotorSequence`](#msgidmotorsequence-motorsequencepayloadtemplate<5>)
+- [`MotorSequence`](#msgidmotorsequence-motorsequencepayloadtemplate5)
 - [`KinematicsRequest`](#msgidkinematicsrequest-kinematicsrequestpayload)
 - [`KinematicsData`](#msgidkinematicsdata-kinematicspayload)
 - [`PowerRequest`](#msgidpowerrequest-powerrequestpayload)
@@ -199,8 +125,8 @@ It remembers the IP address and port of the last connected test harness and bidi
 - [`EnvironmentAck`](#msgidenvironmentack-environmentackpayload)
 - [`EnvironmentRequest`](#msgidenvironmentrequest-environmentrequestpayload)
 - [`EnvironmentData`](#msgidenvironmentdata-environmentpayload)
-- [`AutoDriveCommand`](#msgidautodrivecommand-autodrivecommandtemplate<8>)
-- [`AutoDriveStatus`](#msgidautodrivestatus-autodrivestatustemplate<8, 4>)
+- [`AutoDriveCommand`](#msgidautodrivecommand-autodrivecommandtemplate8)
+- [`AutoDriveStatus`](#msgidautodrivestatus-autodrivestatustemplate8-4)
 - [`MotorStatus`](#msgidmotorstatus-motorstatuspayload)
 - [`PhysicsTick`](#msgidphysicstick-physicstickpayload)
 - [`StateChange`](#msgidstatechange-statechangepayload)
@@ -211,6 +137,9 @@ It remembers the IP address and port of the last connected test harness and bidi
 Each section corresponds to one `MsgId` enumerator. The **direction badge** shows which side initiates the message.
 
 ### `MsgId::Log` (`LogPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Unidirectional log/trace message. Emitted by any component at any time; Python receives these passively from the bus.
 
@@ -247,7 +176,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::StateRequest` (`StateRequestPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored.
 
@@ -270,7 +204,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::StateData` (`StatePayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > State machine snapshot sent in response to a StateRequest. Carries the current coarse lifecycle SystemState.
 
@@ -293,7 +232,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::MotorSequence` (`MotorSequencePayloadTemplate<5>`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence.
 
@@ -378,7 +322,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::KinematicsRequest` (`KinematicsRequestPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > One-byte sentinel. Send to request a KinematicsData snapshot. The payload value is ignored.
 
@@ -402,7 +351,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::KinematicsData` (`KinematicsPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Kinematics snapshot sent in response to a KinematicsRequest. Reflects physics state integrated since the start of the current sequence.
 
@@ -447,7 +401,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::PowerRequest` (`PowerRequestPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > One-byte sentinel. Send to request a PowerData snapshot. The payload value is ignored.
 
@@ -471,7 +430,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::PowerData` (`PowerPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Power-model snapshot sent in response to a PowerRequest. Models a simple battery with internal resistance drain.
 
@@ -516,7 +480,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::ThermalRequest` (`ThermalRequestPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > One-byte sentinel. Send to request a ThermalData snapshot. The payload value is ignored.
 
@@ -539,7 +508,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::ThermalData` (`ThermalPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Thermal snapshot sent in response to a ThermalRequest. Models temperature of motor and battery based on power metrics.
 
@@ -569,7 +543,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::EnvironmentAck` (`EnvironmentAckPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > ACK sent by the application when it accepts new environment data.
 
@@ -592,7 +571,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::EnvironmentRequest` (`EnvironmentRequestPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Request conditions for a specific location.
 
@@ -644,7 +628,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::EnvironmentData` (`EnvironmentPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Environmental conditions delivered to the application from the outside world.
 
@@ -751,7 +740,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::AutoDriveCommand` (`AutoDriveCommandTemplate<8>`)
+
+<details>
+<summary>View details and field table</summary>
 
 > High level autonomous driving route and configuration.
 
@@ -952,7 +946,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::AutoDriveStatus` (`AutoDriveStatusTemplate<8, 4>`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Status and efficiency report from the AutonomousService.
 
@@ -1118,7 +1117,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::MotorStatus` (`MotorStatusPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Internal IPC: Periodic RPM and activity update from MotorService.
 
@@ -1156,7 +1160,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::PhysicsTick` (`PhysicsTickPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration.
 
@@ -1194,7 +1203,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::StateChange` (`StateChangePayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > Internal IPC: Broadcast when moving into or out of Executing state.
 
@@ -1225,7 +1239,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::ResetRequest` (`ResetRequestPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 > One-byte sentinel. Send to request a full physics reset.
 
@@ -1248,7 +1267,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::InternalEnvRequest` (`InternalEnvRequestPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 **Direction:** `Internal`<br>
 **Publishes:** `AutonomousService`<br>
@@ -1277,7 +1301,12 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
   </tbody>
 </table>
 
+</details>
+
 ### `MsgId::InternalEnvData` (`InternalEnvDataPayload`)
+
+<details>
+<summary>View details and field table</summary>
 
 **Direction:** `Internal`<br>
 **Publishes:** `EnvironmentService`<br>
@@ -1304,6 +1333,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 **Wire size:** 16 bytes
 
 _No fields._
+
+</details>
 
 ---
 

@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     pkg-config \
     libssl-dev \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python + pytest ───────────────────────────────────────────────────────────

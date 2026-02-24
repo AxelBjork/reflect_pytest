@@ -1,15 +1,25 @@
 // generate_docs.cpp — Standalone executable that reflects over ipc:: messages
 // and emits a GitHub-renderable Markdown documentation file.
-//
-// Build:  cmake --build build --target generate_docs
-// Run:    ./build/generate_docs > build/doc/README.md
-//         (CMake custom command does this automatically)
+
+#include <filesystem>
 
 #include "app_components.h"
 #include "doc_generator.h"
 
 // Combine all sil_app services plus the virtual main publisher thread
 using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>()));
+
+inline std::string sanitize_anchor(std::string_view s) {
+  std::string out;
+  for (char c : s) {
+    if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_') {
+      out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    } else if (c == ' ') {
+      out += '-';
+    }
+  }
+  return out;
+}
 
 void emit_toc() {
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
@@ -21,8 +31,7 @@ void emit_toc() {
         constexpr auto mid = static_cast<ipc::MsgId>(val);
         constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
         const std::string sname = cpp_type_name_str<T>();
-        std::string link = "msgid" + std::string(mname) + "-" + sname;
-        for (auto& c : link) c = std::tolower(c);
+        std::string link = sanitize_anchor("msgid" + std::string(mname) + "-" + sname);
         std::cout << "- [`" << mname << "`](#" << link << ")\n";
       }
     }());
@@ -56,7 +65,14 @@ void emit_components() {
   }(std::make_index_sequence<num_components>{});
 }
 
-int main() {
+int main(int argc, char** argv) {
+  namespace fs = std::filesystem;
+  fs::path out_dir = ".";
+  if (argc > 1) {
+    out_dir = argv[1];
+  }
+  fs::path dot_path = out_dir / "ipc_flow.dot";
+
   // ── Front-matter & module overview ─────────────────────────────────────────
 
   std::cout <<
@@ -102,9 +118,13 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module to orchestrate test cases, `Network` maps the transport layer across two explicit sockets (`Client -> App` and `App -> Client`), and `Simulator` processes the messages internally.
 
+![IPC Flow Diagram](ipc_flow.svg)
+
 )";
 
-  emit_mermaid_flow<AllComponents>();
+  // Emits the DOT file (for tooling) and also prints the DOT source into the Markdown.
+  // Typical render: dot -Tsvg <dot_path> -o <svg_path>
+  emit_graphviz_flow_markdown<AllComponents>(dot_path.string());
 
   // ── Services & Components ───────────────────────────────────────────────────
   std::cout << "---\n\n## Component Services\n\n";

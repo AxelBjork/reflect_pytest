@@ -51,11 +51,12 @@ target_compile_options(generate_docs PRIVATE -freflection)
 target_compile_definitions(generate_docs PRIVATE REFLECT_DOCS)
 
 add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/doc/README.md
+    OUTPUT ${CMAKE_SOURCE_DIR}/doc/README.md ${CMAKE_SOURCE_DIR}/doc/ipc_flow.dot ${CMAKE_SOURCE_DIR}/doc/ipc_flow.svg
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/doc
-    COMMAND generate_docs > ${CMAKE_SOURCE_DIR}/doc/README.md
+    COMMAND generate_docs ${CMAKE_SOURCE_DIR}/doc > ${CMAKE_SOURCE_DIR}/doc/README.md
+    COMMAND dot -Tsvg ${CMAKE_SOURCE_DIR}/doc/ipc_flow.dot -o ${CMAKE_SOURCE_DIR}/doc/ipc_flow.svg
     DEPENDS generate_docs
-    COMMENT "Generating IPC protocol Markdown documentation..."
+    COMMENT "Generating IPC protocol documentation (Markdown, DOT, and SVG)..."
 )
 
 add_custom_target(protocol_docs ALL
