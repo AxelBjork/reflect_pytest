@@ -9,35 +9,6 @@
 // Combine all sil_app services plus the virtual main publisher thread
 using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>()));
 
-inline std::string sanitize_anchor(std::string_view s) {
-  std::string out;
-  for (char c : s) {
-    if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_') {
-      out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    } else if (c == ' ') {
-      out += '-';
-    }
-  }
-  return out;
-}
-
-void emit_toc() {
-  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-    (..., [] {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, get_enum_size<ipc::MsgId>()>::arr[Is];
-      constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      using T = typename doc_payload_or_void<val>::type;
-      if constexpr (!std::is_void_v<T>) {
-        constexpr auto mid = static_cast<ipc::MsgId>(val);
-        constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
-        const std::string sname = cpp_type_name_str<T>();
-        std::string link = sanitize_anchor("msgid" + std::string(mname) + "-" + sname);
-        std::cout << "- [`" << mname << "`](#" << link << ")\n";
-      }
-    }());
-  }(std::make_index_sequence<get_enum_size<ipc::MsgId>()>{});
-}
-
 template <typename Components>
 void emit_payloads() {
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
@@ -131,12 +102,10 @@ This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module 
   std::cout << "The application is composed of the following services:\n\n";
   emit_components<AllComponents>();
 
-  // ── Message Payloads & TOC ──────────────────────────────────────────────────
+  // ── Message Payloads ──────────────────────────────────────────────────
   std::cout << "---\n\n## Message Payloads\n\n";
 
-  emit_toc();
-
-  std::cout << "\nEach section corresponds to one `MsgId` enumerator. "
+  std::cout << "Each section corresponds to one `MsgId` enumerator. "
                "The **direction badge** shows which side initiates the message.\n\n";
 
   emit_payloads<AllComponents>();

@@ -382,8 +382,10 @@ void emit_md_payload_section() {
   } else {
     sname = get_cxx_type_name<Payload>();
   }
-  std::cout << "### `MsgId::" << mname << "` (`" << sname << "`)\n\n";
-  std::cout << "<details>\n<summary>View details and field table</summary>\n\n";
+
+  std::cout << "<details>\n";
+  std::cout << "<summary><font size=\"+1\"><b>MsgId::" << mname << " (" << sname
+            << ")</b></font></summary>\n\n";
   if (desc.text[0] != '\0') std::cout << "> " << desc.text << "\n\n";
 
   constexpr bool cxx_sub = internal_cxx_subscribes<Components, mid>();
@@ -647,82 +649,123 @@ void emit_graphviz_flow_dot(std::ostream& os) {
   constexpr std::size_t num_msgs = get_enum_size<ipc::MsgId>();
 
   os << "digraph IPC {\n";
-  os << "  rankdir=TB;\n";
-  os << "  newrank=true;\n";
-  os << "  nodesep=1.2;\n";
-  os << "  ranksep=1.5;\n";
-  os << "  splines=curved;\n";
-  os << "  bgcolor=transparent;\n";
-  os << "  edge [fontsize=16, fontcolor=\"#475569\", color=\"#94A3B8\", penwidth=2.0];\n\n";
+  os << "  rankdir=LR;\n";
+  os << "  bgcolor=\"#0F172A\";\n";
+  os << "  pad=0.22;\n";
+  os << "  nodesep=0.62;\n";
+  os << "  ranksep=0.70;\n";
+  os << "  splines=spline;\n";
+  os << "  remincross=true;\n\n";
+
+  os << "  fontname=\"Helvetica,Arial,sans-serif\";\n";
+  os << "  fontsize=52;\n";
+  os << "  fontcolor=\"#F1F5F9\";\n";
+  os << "  label=<<B>System Architecture and Message Flow</B>>;\n";
+  os << "  labelloc=\"t\";\n\n";
+
+  os << "  node [\n"
+     << "    fontname=\"Helvetica,Arial,sans-serif\",\n"
+     << "    shape=rect,\n"
+     << "    style=\"filled,rounded\",\n"
+     << "    fixedsize=false,\n"
+     << "    margin=\"0.12,0.08\",\n"
+     << "    fontsize=28,\n"
+     << "    fontcolor=\"#FFFFFF\",\n"
+     << "    penwidth=4,\n"
+     << "    color=\"#F1F5F9\"\n"
+     << "  ];\n\n";
+
+  os << "  edge [\n"
+     << "    fontname=\"Helvetica,Arial,sans-serif\",\n"
+     << "    fontsize=22,\n"
+     << "    fontcolor=\"#CBD5E1\",\n"
+     << "    color=\"#64748B\",\n"
+     << "    penwidth=3.0,\n"
+     << "    arrowsize=1.4,\n"
+     << "    labelfloat=false,\n"
+     << "    labeldistance=0.8,\n"
+     << "    labelangle=10\n"
+     << "  ];\n\n";
 
   // Tier 1: Simulator Services
+  os << "  // --- Simulator ---\n";
   os << "  subgraph cluster_sim {\n";
-  os << "    label=\"Simulator Services\";\n";
-  os << "    fontsize=36; fontcolor=\"#1E293B\"; style=dotted; color=\"#CBD5E1\"; labeljust=l;\n";
+  os << "    label=<<B><FONT POINT-SIZE=\"40\">Simulator</FONT></B>>;\n";
+  os << "    fontcolor=\"#F1F5F9\";\n";
+  os << "    style=\"rounded,filled\";\n";
+  os << "    color=\"#475569\";\n";
+  os << "    penwidth=4;\n";
+  os << "    fillcolor=\"#1E293B\";\n";
+  os << "    margin=34;\n";
+
+  const std::string ub_id = dot_id("UdpBridge");
+
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [&] {
       using Comp = std::tuple_element_t<Is, Components>;
-      if constexpr (std::is_same_v<Comp, ipc::UdpBridge>) return;
       constexpr auto R = ^^Comp;
       const std::string cname = cpp_type_name_str<Comp>();
-      std::string desc_text = wrap_words(first_sentence(get_desc<R>().text), 50);
-      os << "    " << dot_id(cname)
-         << " [shape=none, label=<<TABLE BORDER=\"0\" CELLBORDER=\"2\" CELLSPACING=\"0\" "
-            "CELLPADDING=\"10\" BGCOLOR=\"white\" COLOR=\"#0284C7\">\n"
-         << "      <TR><TD BGCOLOR=\"#E0F2FE\" ALIGN=\"LEFT\"><B><FONT COLOR=\"#0369A1\" "
-            "POINT-SIZE=\"24\">"
-         << html_escape(cname) << "</FONT></B></TD></TR>\n"
-         << "      <TR><TD ALIGN=\"LEFT\" VALIGN=\"TOP\"><FONT POINT-SIZE=\"16\" COLOR=\"#334155\">"
-         << html_escape(desc_text) << "</FONT></TD></TR>\n"
-         << "    </TABLE>>];\n";
+
+      if constexpr (std::is_same_v<Comp, ipc::UdpBridge>) {
+        os << "    " << ub_id << " [\n"
+           << "      fillcolor=\"#0F766E\",\n"
+           << "      label=<<B><FONT POINT-SIZE=\"38\">" << html_escape(cname)
+           << "</FONT></B><BR/><FONT POINT-SIZE=\"26\">Message Distribution Hub</FONT>>\n"
+           << "    ];\n";
+      } else {
+        std::string desc_text = wrap_words(first_sentence(get_desc<R>().text), 40);
+        if (desc_text.empty()) desc_text = cname;
+        os << "    " << dot_id(cname) << " [\n"
+           << "      fillcolor=\"#0369A1\",\n"
+           << "      label=<<B><FONT POINT-SIZE=\"30\">" << html_escape(cname)
+           << "</FONT></B><BR/><FONT POINT-SIZE=\"24\">" << html_escape(desc_text) << "</FONT>>\n"
+           << "    ];\n";
+      }
     }());
   }(std::make_index_sequence<std::tuple_size_v<Components>>{});
   os << "  }\n\n";
 
-  // Tier 2: UdpBridge (Central Message Hub)
-  const std::string ub_id = dot_id("UdpBridge");
-  os << "  " << ub_id
-     << " [shape=none, label=<<TABLE BORDER=\"0\" CELLBORDER=\"2\" CELLSPACING=\"0\" "
-        "CELLPADDING=\"12\" BGCOLOR=\"white\" COLOR=\"#0D9488\">\n"
-     << "    <TR><TD BGCOLOR=\"#CCFBF1\" ALIGN=\"CENTER\"><B><FONT COLOR=\"#0F766E\" "
-        "POINT-SIZE=\"28\">UdpBridge</FONT></B></TD></TR>\n"
-     << "    <TR><TD ALIGN=\"CENTER\"><FONT POINT-SIZE=\"18\" COLOR=\"#475569\">Message "
-        "Distribution Hub</FONT></TD></TR>\n"
-     << "  </TABLE>>];\n\n";
+  // Tier 2: Network Layer
+  os << "  // --- Network Layer bounding box (TX/RX) ---\n";
+  os << "  subgraph cluster_sockets {\n";
+  os << "    label=<<B><FONT POINT-SIZE=\"40\">Network Layer</FONT></B>>;\n";
+  os << "    fontcolor=\"#F1F5F9\";\n";
+  os << "    style=\"rounded,filled\";\n";
+  os << "    color=\"#F59E0B\";\n";
+  os << "    penwidth=6;\n";
+  os << "    fillcolor=\"#2A1B07\";\n";
+  os << "    margin=24;\n\n";
+  os << "    { rank=same; TX; RX; }\n\n";
 
-  // Tier 3: Network Layer
-  os << "  subgraph cluster_net {\n";
-  os << "    label=\"Network Layer\";\n";
-  os << "    fontsize=36; fontcolor=\"#1E293B\"; style=dotted; color=\"#CBD5E1\"; labeljust=l;\n";
-  os << "    TX [shape=none, label=<<TABLE BORDER=\"0\" CELLBORDER=\"2\" CELLSPACING=\"0\" "
-        "CELLPADDING=\"10\" BGCOLOR=\"white\" COLOR=\"#D97706\">\n"
-     << "      <TR><TD BGCOLOR=\"#FEF3C7\" ALIGN=\"CENTER\"><B><FONT COLOR=\"#92400E\" "
-        "POINT-SIZE=\"24\">TX Socket</FONT></B></TD></TR>\n"
-     << "      <TR><TD ALIGN=\"CENTER\"><FONT POINT-SIZE=\"16\" COLOR=\"#475569\">Port 9000 (SIL "
-        "Inbound)</FONT></TD></TR>\n"
-     << "    </TABLE>>];\n";
-  os << "    RX [shape=none, label=<<TABLE BORDER=\"0\" CELLBORDER=\"2\" CELLSPACING=\"0\" "
-        "CELLPADDING=\"10\" BGCOLOR=\"white\" COLOR=\"#D97706\">\n"
-     << "      <TR><TD BGCOLOR=\"#FEF3C7\" ALIGN=\"CENTER\"><B><FONT COLOR=\"#92400E\" "
-        "POINT-SIZE=\"24\">RX Socket</FONT></B></TD></TR>\n"
-     << "      <TR><TD ALIGN=\"CENTER\"><FONT POINT-SIZE=\"16\" COLOR=\"#475569\">Port 9001 (SIL "
-        "Outbound)</FONT></TD></TR>\n"
-     << "    </TABLE>>];\n";
+  os << "    TX [\n"
+     << "      fillcolor=\"#B45309\",\n"
+     << "      label=<<B><FONT POINT-SIZE=\"30\">TX Socket</FONT></B><BR/><FONT "
+        "POINT-SIZE=\"24\">Port 9000 (SIL Inbound)</FONT>>\n"
+     << "    ];\n";
+  os << "    RX [\n"
+     << "      fillcolor=\"#B45309\",\n"
+     << "      label=<<B><FONT POINT-SIZE=\"30\">RX Socket</FONT></B><BR/><FONT "
+        "POINT-SIZE=\"24\">Port 9001 (SIL Outbound)</FONT>>\n"
+     << "    ];\n\n";
+  os << "    TX -> RX [style=invis, weight=50, constraint=false];\n";
   os << "  }\n\n";
 
-  // Tier 4: Test Harness
-  os << "  subgraph cluster_py {\n";
-  os << "    label=\"Test Harness\";\n";
-  os << "    fontsize=36; fontcolor=\"#1E293B\"; style=dotted; color=\"#CBD5E1\"; labeljust=l;\n";
-  os << "    TestCase [shape=none, label=<<TABLE BORDER=\"0\" CELLBORDER=\"2\" CELLSPACING=\"0\" "
-        "CELLPADDING=\"14\" BGCOLOR=\"white\" COLOR=\"#059669\">\n"
-     << "      <TR><TD BGCOLOR=\"#D1FAE5\" ALIGN=\"CENTER\" WIDTH=\"250\"><B><FONT "
-        "COLOR=\"#065F46\" POINT-SIZE=\"26\">Test Case / Fixtures</FONT></B></TD></TR>\n"
-     << "    </TABLE>>];\n";
-  os << "  }\n\n";
+  // Tier 3: Test Harness
+  os << "  // --- Test Harness bounding box ---\n";
+  os << "  subgraph cluster_fixtures {\n";
+  os << "    label=<<B><FONT POINT-SIZE=\"40\">Test Harness</FONT></B>>;\n";
+  os << "    fontcolor=\"#F1F5F9\";\n";
+  os << "    style=\"rounded,filled\";\n";
+  os << "    color=\"#22C55E\";\n";
+  os << "    penwidth=6;\n";
+  os << "    fillcolor=\"#0B2A20\";\n";
+  os << "    margin=24;\n\n";
 
-  // Rank constraints
-  os << "  { rank=same; TX; RX; }\n\n";
+  os << "    TestCase [\n"
+     << "      fillcolor=\"#047857\",\n"
+     << "      label=<<B><FONT POINT-SIZE=\"34\">Test Case / Fixtures</FONT></B>>\n"
+     << "    ];\n";
+  os << "  }\n\n";
 
   // Collect edges
   EdgeMap edge_map;
@@ -736,27 +779,19 @@ void emit_graphviz_flow_dot(std::ostream& os) {
     }());
   }(std::make_index_sequence<num_msgs>{});
 
-  // Emit aggregated edges
-  for (auto const& [pair, names] : edge_map) {
-    std::string label;
-    bool first = true;
-    for (auto const& name : names) {
-      if (!first) label += "\n";
-      label += name;
-      first = false;
-    }
-    os << "  " << pair.first << " -> " << pair.second << " [label=\"" << dot_escape_label(label)
-       << "\"];\n";
-  }
-
-  // Bridging labels (aggregated)
+  // Bridging labels (aggregated, paired)
   auto build_label = [](const std::set<std::string>& names) {
     std::string out;
-    bool first = true;
+    int count = 0;
     for (auto const& n : names) {
-      if (!first) out += "\n";
+      if (count > 0) {
+        if (count % 2 == 0)
+          out += "\n";
+        else
+          out += ", ";
+      }
       out += n;
-      first = false;
+      count++;
     }
     return out;
   };
@@ -764,14 +799,24 @@ void emit_graphviz_flow_dot(std::ostream& os) {
   std::string in_l = build_label(inbound_msg_names);
   std::string out_l = build_label(outbound_msg_names);
 
-  os << "  TX -> TestCase [label=\"send_msg\", dir=back, color=\"#64748B\", penwidth=2.5];\n";
-  if (!in_l.empty())
-    os << "  " << ub_id << " -> TX [label=\"" << dot_escape_label(in_l)
-       << "\", dir=back, color=\"#64748B\", penwidth=2.5];\n";
-  if (!out_l.empty())
-    os << "  " << ub_id << " -> RX [label=\"" << dot_escape_label(out_l)
-       << "\", color=\"#64748B\", penwidth=2.5];\n";
-  os << "  RX -> TestCase [label=\"recv_msg\", color=\"#64748B\", penwidth=2.5];\n";
+  // Flow: Test Harness -> Network -> Simulator
+  os << "  TestCase -> TX [label=\"send_msg\", color=\"#F1F5F9\", penwidth=5];\n";
+  os << "  TX -> " << ub_id << " [label=\"Inbound Traffic:\\n"
+     << dot_escape_label(in_l) << "\", color=\"#F1F5F9\", penwidth=5, fontsize=25];\n\n";
+
+  // Internal Simulator Logic
+  os << "  // Internal Simulator Logic\n";
+  for (auto const& [pair, names] : edge_map) {
+    os << "  " << pair.first << " -> " << pair.second << " [label=\""
+       << dot_escape_label(build_label(names)) << "\", style=dashed];\n";
+  }
+
+  os << "\n  // Flow: Simulator -> Network -> Test Harness\n";
+  os << "  RX -> " << ub_id << " [label=\"Outbound Traffic:\\n"
+     << dot_escape_label(out_l)
+     << "\", color=\"#F1F5F9\", penwidth=5, dir=back, fontsize=25, arrowtail=normal];\n";
+  os << "  TestCase -> RX [label=\"recv_msg\", color=\"#F1F5F9\", penwidth=5, dir=back, "
+        "arrowtail=normal];\n";
 
   os << "}\n";
 }
