@@ -27,22 +27,6 @@ void EnvironmentService::on_message(const ipc::EnvironmentPayload& env) {
   bus_.publish<ipc::MsgId::EnvironmentAck>(ipc::EnvironmentAckPayload{env.region_id});
 }
 
-// Unbound fall-back for standard requests if ever restored to Subscribes
-void EnvironmentService::on_message(const ipc::EnvironmentRequestPayload& req) {
-  std::lock_guard lk{mu_};
-  for (const auto& env : cache_) {
-    if (req.target_location.x >= env->bounds.min_pt.x &&
-        req.target_location.x <= env->bounds.max_pt.x &&
-        req.target_location.y >= env->bounds.min_pt.y &&
-        req.target_location.y <= env->bounds.max_pt.y) {
-      logger_.info("External query hit: serving region %u", env->region_id);
-      // We send EnvironmentData for external queries (Python)
-      bus_.publish<ipc::MsgId::EnvironmentData>(*env);
-      return;
-    }
-  }
-}
-
 void EnvironmentService::on_message(const ipc::ResetRequestPayload& req) {
   std::lock_guard lk{mu_};
   cache_.clear();

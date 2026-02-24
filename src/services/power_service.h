@@ -26,7 +26,7 @@ class DOC_DESC(
     "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$") PowerService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::PowerRequest,
-                                  ipc::MsgId::StateChange, ipc::MsgId::ResetRequest>;
+                                  ipc::MsgId::MotorStatus, ipc::MsgId::ResetRequest>;
   using Publishes = ipc::MsgList<ipc::MsgId::PowerData>;
 
   explicit PowerService(ipc::MessageBus& bus) : bus_(bus), logger_("power") {
@@ -41,6 +41,7 @@ class DOC_DESC(
     voltage_v_ = std::max(V_MIN, voltage_v_ - dv);
     soc_ = static_cast<uint8_t>(
         std::clamp((voltage_v_ - V_MIN) / (V_MAX - V_MIN) * 100.0f, 0.0f, 100.0f));
+    cmd_id_ = tick.cmd_id;
 
     // Log every 100 ticks (approx 1s)
     static uint32_t count = 0;
@@ -49,10 +50,10 @@ class DOC_DESC(
     }
   }
 
-  void on_message(const ipc::StateChangePayload& sc) {
+  void on_message(const ipc::MotorStatusPayload& ms) {
     std::lock_guard lk{mu_};
-    cmd_id_ = sc.cmd_id;
-    if (sc.state == ipc::SystemState::Ready) {
+    cmd_id_ = ms.cmd_id;
+    if (!ms.is_active) {
       current_a_ = 0.0f;
     }
   }

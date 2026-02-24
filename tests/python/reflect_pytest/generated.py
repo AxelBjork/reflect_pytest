@@ -23,10 +23,9 @@ class MsgId(IntEnum):
     AutoDriveStatus = 14
     MotorStatus = 15
     PhysicsTick = 16
-    StateChange = 17
-    ResetRequest = 18
-    InternalEnvRequest = 19
-    InternalEnvData = 20
+    ResetRequest = 17
+    InternalEnvRequest = 18
+    InternalEnvData = 19
 
 class Severity(IntEnum):
     """Severity level attached to every LogPayload message."""
@@ -107,7 +106,7 @@ class StateRequestPayload:
 
 @dataclass
 class StatePayload:
-    """State machine snapshot sent in response to a StateRequest. Carries the current coarse lifecycle SystemState."""
+    """State machine snapshot. Carries the current coarse lifecycle SystemState."""
     WIRE_SIZE = 1
     state: SystemState
 
@@ -620,25 +619,6 @@ class PhysicsTickPayload:
         return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, dt_us=dt_us)
 
 @dataclass
-class StateChangePayload:
-    """Internal IPC: Broadcast when moving into or out of Executing state."""
-    WIRE_SIZE = 5
-    state: SystemState
-    cmd_id: int
-
-    def pack_wire(self) -> bytes:
-        data = bytearray()
-        data.extend(struct.pack("<BI", self.state, self.cmd_id))
-        return bytes(data)
-
-    @classmethod
-    def unpack_wire(cls, data: bytes) -> "StateChangePayload":
-        offset = 0
-        state, cmd_id = struct.unpack_from("<BI", data, offset)
-        offset += struct.calcsize("<BI")
-        return cls(state=state, cmd_id=cmd_id)
-
-@dataclass
 class ResetRequestPayload:
     """One-byte sentinel. Send to request a full physics reset."""
     WIRE_SIZE = 1
@@ -722,7 +702,6 @@ MESSAGE_BY_ID = {
     MsgId.AutoDriveStatus: AutoDriveStatusTemplate_8__4,
     MsgId.MotorStatus: MotorStatusPayload,
     MsgId.PhysicsTick: PhysicsTickPayload,
-    MsgId.StateChange: StateChangePayload,
     MsgId.ResetRequest: ResetRequestPayload,
     MsgId.InternalEnvRequest: InternalEnvRequestPayload,
     MsgId.InternalEnvData: InternalEnvDataPayload,
@@ -746,7 +725,6 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.AutoDriveStatus: 152,
     MsgId.MotorStatus: 7,
     MsgId.PhysicsTick: 10,
-    MsgId.StateChange: 5,
     MsgId.ResetRequest: 1,
     MsgId.InternalEnvRequest: 8,
     MsgId.InternalEnvData: 16,

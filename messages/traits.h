@@ -100,12 +100,6 @@ struct MessageTraits<MsgId::PhysicsTick> {
 };
 
 template <>
-struct MessageTraits<MsgId::StateChange> {
-  using Payload = StateChangePayload;
-  static constexpr std::string_view name = "StateChange";
-};
-
-template <>
 struct MessageTraits<MsgId::ResetRequest> {
   using Payload = ResetRequestPayload;
   static constexpr std::string_view name = "ResetRequest";

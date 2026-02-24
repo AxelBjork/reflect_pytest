@@ -17,12 +17,6 @@ StateService::~StateService() {
   if (clock_thread_.joinable()) clock_thread_.join();
 }
 
-void StateService::on_message(const ipc::StateChangePayload& sc) {
-  logger_.info("State transition to %u", (uint32_t)sc.state);
-  std::lock_guard lk{mu_};
-  state_ = sc.state;
-}
-
 void StateService::on_message(const ipc::StateRequestPayload&) {
   ipc::StatePayload r{};
   {
@@ -37,6 +31,13 @@ void StateService::on_message(const ipc::MotorStatusPayload& ms) {
   last_cmd_id_ = ms.cmd_id;
   last_rpm_ = ms.speed_rpm;
   last_active_ = ms.is_active;
+
+  ipc::SystemState next_state =
+      ms.is_active ? ipc::SystemState::Executing : ipc::SystemState::Ready;
+  if (next_state != state_) {
+    state_ = next_state;
+    logger_.info("State transition to %u", (uint32_t)state_);
+  }
 }
 
 void StateService::clock_loop() {
@@ -51,10 +52,12 @@ void StateService::clock_loop() {
       std::lock_guard lk{mu_};
       cmd_id = last_cmd_id_;
       rpm = last_rpm_;
-      active = last_active_ && (state_ == ipc::SystemState::Executing);
-    }
+      // We only report RPM if we are actually in Executing state.
+      // Otherwise report 0 to kinematics/power listeners.
+      if (state_ != ipc::SystemState::Executing) {
+        rpm = 0;
+      }
 
-    if (active) {
       bus_.publish<ipc::MsgId::PhysicsTick>({cmd_id, rpm, kTickUs});
     }
 

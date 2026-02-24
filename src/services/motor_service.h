@@ -1,8 +1,5 @@
 #pragma once
-#include <atomic>
-#include <condition_variable>
 #include <mutex>
-#include <thread>
 
 #include "component.h"
 #include "component_logger.h"
@@ -18,7 +15,7 @@ class DOC_DESC(
  public:
   using Subscribes =
       ipc::MsgList<ipc::MsgId::MotorSequence, ipc::MsgId::PhysicsTick, ipc::MsgId::ResetRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::StateChange, ipc::MsgId::MotorStatus>;
+  using Publishes = ipc::MsgList<ipc::MsgId::MotorStatus>;
 
   explicit MotorService(ipc::MessageBus& bus);
   ~MotorService() = default;

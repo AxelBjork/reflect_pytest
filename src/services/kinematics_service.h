@@ -20,7 +20,7 @@ class DOC_DESC(
     "$$ x = \\int v \\, dt $$") KinematicsService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::KinematicsRequest,
-                                  ipc::MsgId::StateChange, ipc::MsgId::ResetRequest>;
+                                  ipc::MsgId::MotorStatus, ipc::MsgId::ResetRequest>;
   using Publishes = ipc::MsgList<ipc::MsgId::KinematicsData>;
 
   explicit KinematicsService(ipc::MessageBus& bus) : bus_(bus), logger_("kinematics") {
@@ -33,17 +33,22 @@ class DOC_DESC(
     speed_mps_ = tick.speed_rpm * K_RPM_TO_MPS;
     position_m_ += speed_mps_ * dt_s;
     elapsed_us_ += tick.dt_us;
+    cmd_id_ = tick.cmd_id;
 
+    // Log every 100 ticks (approx 1s)
     static uint32_t count = 0;
-    logger_.info("Position: %.3fm, Speed: %.3fm/s", position_m_, speed_mps_);
+    if (++count % 100 == 0) {
+      logger_.info("Position: %.3fm, Speed: %.3fm/s", position_m_, speed_mps_);
+    }
   }
 
-  void on_message(const ipc::StateChangePayload& sc) {
+  void on_message(const ipc::MotorStatusPayload& ms) {
     std::lock_guard lk{mu_};
-    cmd_id_ = sc.cmd_id;
-    if (sc.state == ipc::SystemState::Executing) {
+    if (ms.is_active && ms.cmd_id != cmd_id_) {
+      // New sequence detected
+      cmd_id_ = ms.cmd_id;
       elapsed_us_ = 0;
-    } else if (sc.state == ipc::SystemState::Ready) {
+    } else if (!ms.is_active) {
       speed_mps_ = 0.0f;
     }
   }

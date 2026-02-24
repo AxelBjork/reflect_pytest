@@ -68,11 +68,10 @@ enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is
   EnvironmentData,     // Python -> C++: delivery of environmental conditions
   AutoDriveCommand,    // Python -> C++: complex autonomous driving route
   AutoDriveStatus,     // C++ -> Python: execution status and efficiency metrics
-  MotorStatus,         // Motor -> State: periodic RPM update
+  MotorStatus,         // Motor -> Others: periodic RPM and activity update
 
   // -- Internal Component IPC --
   PhysicsTick,   // Motor -> Others: 100Hz tick with RPM and dt_us
-  StateChange,   // Motor -> Others: SystemState transition
   ResetRequest,  // Python -> C++: Reset all physics state
 
   InternalEnvRequest,  // Internal: Request pointer to environment data
@@ -138,7 +137,7 @@ struct DOC_DESC(
   uint8_t reserved;
 };
 
-struct DOC_DESC("State machine snapshot sent in response to a StateRequest. "
+struct DOC_DESC("State machine snapshot. "
                 "Carries the current coarse lifecycle SystemState.") StatePayload {
   SystemState state;
 };
@@ -285,12 +284,6 @@ struct DOC_DESC("Internal IPC: Broadcast at 100Hz during sequence execution "
   uint32_t cmd_id;
   int16_t speed_rpm;
   uint32_t dt_us;
-};
-
-struct DOC_DESC("Internal IPC: Broadcast when moving into or out of Executing state.")
-    StateChangePayload {
-  SystemState state;
-  uint32_t cmd_id;
 };
 
 struct DOC_DESC("Internal IPC: Periodic RPM and activity update from MotorService.")

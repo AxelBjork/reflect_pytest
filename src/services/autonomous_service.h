@@ -149,22 +149,16 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
         seq.num_steps = 1;
         seq.steps[0] = {0, 0};  // Stop
         bus_.publish<ipc::MsgId::MotorSequence>(seq);
-      } else {
-        node_start_energy_j_ = current_total_energy_j_;
-        node_start_pos_m_ = kin.position_m;
-        publish_motor_sequence_for_current_node();
-        // Periodically publish status
-        bus_.publish<ipc::MsgId::AutoDriveStatus>(status_);
       }
     }
     last_pos_m_ = kin.position_m;
   }
 
-  void on_message(const ipc::PhysicsTickPayload& tick) {
+  void on_message(const ipc::PhysicsTickPayload&) {
     std::lock_guard lk{mu_};
     if (route_active_) {
-      bus_.publish<ipc::MsgId::KinematicsRequest>(ipc::KinematicsRequestPayload{0});
-      bus_.publish<ipc::MsgId::PowerRequest>(ipc::PowerRequestPayload{0});
+      bus_.publish<ipc::MsgId::KinematicsRequest>({0});
+      bus_.publish<ipc::MsgId::PowerRequest>({0});
     }
   }
 

@@ -1,6 +1,5 @@
 #pragma once
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -17,8 +16,7 @@ class DOC_DESC(
     "This component tracks the system state and generates the 100Hz `PhysicsTick` "
     "heartbeat that drives all other simulation services.") StateService {
  public:
-  using Subscribes =
-      ipc::MsgList<ipc::MsgId::StateChange, ipc::MsgId::StateRequest, ipc::MsgId::MotorStatus>;
+  using Subscribes = ipc::MsgList<ipc::MsgId::StateRequest, ipc::MsgId::MotorStatus>;
   using Publishes = ipc::MsgList<ipc::MsgId::StateData, ipc::MsgId::PhysicsTick>;
 
   explicit StateService(ipc::MessageBus& bus);
@@ -27,7 +25,6 @@ class DOC_DESC(
   StateService(const StateService&) = delete;
   StateService& operator=(const StateService&) = delete;
 
-  void on_message(const ipc::StateChangePayload& sc);
   void on_message(const ipc::StateRequestPayload&);
   void on_message(const ipc::MotorStatusPayload& ms);
 

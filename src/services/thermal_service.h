@@ -65,6 +65,17 @@ class DOC_DESC("Thermal Service") ThermalService {
   }
 
  private:
+  void publish_data() {
+    ipc::ThermalPayload p{};
+    {
+      std::lock_guard lk{mu_};
+      p.motor_temp_c = motor_temp_c_;
+      p.battery_temp_c = battery_temp_c_;
+    }
+    bus_.publish<ipc::MsgId::ThermalData>(p);
+  }
+
+ private:
   ipc::MessageBus& bus_;
   ComponentLogger logger_;
   std::mutex mu_;

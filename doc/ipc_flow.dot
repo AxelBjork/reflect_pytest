@@ -125,7 +125,7 @@ digraph IPC {
   }
 
   TestCase -> TX [label="send_msg", color="#F1F5F9", penwidth=5];
-  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nEnvironmentRequest, KinematicsData\nKinematicsRequest, MotorSequence\nPowerData, PowerRequest\nResetRequest, StateRequest\nThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
+  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nKinematicsData, KinematicsRequest\nMotorSequence, PowerData\nPowerRequest, ResetRequest\nStateRequest, ThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
 
   // Internal Simulator Logic
   AutonomousService -> EnvironmentService [label="InternalEnvRequest", style=dashed];
@@ -134,9 +134,9 @@ digraph IPC {
   EnvironmentService -> UdpBridge [label="EnvironmentAck, EnvironmentRequest", style=dashed];
   KinematicsService -> UdpBridge [label="KinematicsData", style=dashed];
   LogService -> UdpBridge [label="Log", style=dashed];
-  MotorService -> KinematicsService [label="StateChange", style=dashed];
-  MotorService -> PowerService [label="StateChange", style=dashed];
-  MotorService -> StateService [label="MotorStatus, StateChange", style=dashed];
+  MotorService -> KinematicsService [label="MotorStatus", style=dashed];
+  MotorService -> PowerService [label="MotorStatus", style=dashed];
+  MotorService -> StateService [label="MotorStatus", style=dashed];
   PowerService -> UdpBridge [label="PowerData", style=dashed];
   StateService -> AutonomousService [label="PhysicsTick", style=dashed];
   StateService -> KinematicsService [label="PhysicsTick", style=dashed];
@@ -146,7 +146,7 @@ digraph IPC {
   StateService -> UdpBridge [label="StateData", style=dashed];
   ThermalService -> UdpBridge [label="ThermalData", style=dashed];
   UdpBridge -> AutonomousService [label="AutoDriveCommand, KinematicsData\nPowerData, ResetRequest", style=dashed];
-  UdpBridge -> EnvironmentService [label="EnvironmentData, EnvironmentRequest\nResetRequest", style=dashed];
+  UdpBridge -> EnvironmentService [label="EnvironmentData, ResetRequest", style=dashed];
   UdpBridge -> KinematicsService [label="KinematicsRequest, ResetRequest", style=dashed];
   UdpBridge -> MotorService [label="MotorSequence, ResetRequest", style=dashed];
   UdpBridge -> PowerService [label="PowerRequest, ResetRequest", style=dashed];

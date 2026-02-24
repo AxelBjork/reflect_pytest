@@ -21,14 +21,13 @@ class DOC_DESC(
     "coupling.") EnvironmentService {
  public:
   using Subscribes = ipc::MsgList<ipc::MsgId::EnvironmentData, ipc::MsgId::ResetRequest,
-                                  ipc::MsgId::InternalEnvRequest, ipc::MsgId::EnvironmentRequest>;
+                                  ipc::MsgId::InternalEnvRequest>;
   using Publishes = ipc::MsgList<ipc::MsgId::EnvironmentAck, ipc::MsgId::EnvironmentRequest,
                                  ipc::MsgId::InternalEnvData>;
 
   explicit EnvironmentService(ipc::MessageBus& bus);
 
   void on_message(const ipc::EnvironmentPayload& env);
-  void on_message(const ipc::EnvironmentRequestPayload& req);
   void on_message(const ipc::ResetRequestPayload& req);
   void on_message(const ipc::InternalEnvRequestPayload& req);
 

@@ -28,8 +28,8 @@ class DOC_DESC(
                              MsgId::ThermalData, MsgId::EnvironmentAck, MsgId::AutoDriveStatus,
                              MsgId::EnvironmentRequest>;
   using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
-                            MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::EnvironmentRequest,
-                            MsgId::ResetRequest, MsgId::AutoDriveCommand, MsgId::EnvironmentData>;
+                            MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::ResetRequest,
+                            MsgId::AutoDriveCommand, MsgId::EnvironmentData>;
 
   static constexpr uint16_t kDefaultPort = 9000;
 

@@ -183,7 +183,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 <details>
 <summary><font size="+1"><b>MsgId::StateData (StatePayload)</b></font></summary>
 
-> State machine snapshot sent in response to a StateRequest. Carries the current coarse lifecycle SystemState.
+> State machine snapshot. Carries the current coarse lifecycle SystemState.
 
 **Direction:** `Outbound`<br>
 **Publishes:** `StateService`<br>
@@ -534,9 +534,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Request conditions for a specific location.
 
-**Direction:** `Bidirectional`<br>
+**Direction:** `Outbound`<br>
 **Publishes:** `EnvironmentService`<br>
-**Subscribes:** `EnvironmentService`<br>
 **Wire size:** 8 bytes
 
 <table>
@@ -1074,7 +1073,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
-**Subscribes:** `StateService`<br>
+**Subscribes:** `KinematicsService`, `PowerService`, `StateService`<br>
 **Wire size:** 7 bytes
 
 <table>
@@ -1143,40 +1142,6 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>int</td>
       <td>4</td>
       <td>6</td>
-    </tr>
-  </tbody>
-</table>
-
-</details>
-
-<details>
-<summary><font size="+1"><b>MsgId::StateChange (StateChangePayload)</b></font></summary>
-
-> Internal IPC: Broadcast when moving into or out of Executing state.
-
-**Direction:** `Internal`<br>
-**Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `StateService`<br>
-**Wire size:** 5 bytes
-
-<table>
-  <thead>
-    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>state</td>
-      <td>SystemState</td>
-      <td>SystemState</td>
-      <td>1</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>cmd_id</td>
-      <td>uint32_t</td>
-      <td>int</td>
-      <td>4</td>
-      <td>1</td>
     </tr>
   </tbody>
 </table>

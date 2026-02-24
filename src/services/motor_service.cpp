@@ -20,13 +20,11 @@ void MotorService::on_message(const ipc::MotorSequencePayload& cmd) {
   if (start_immediately) {
     active_ = true;
     step_remaining_us_ = current_cmd_.steps[0].duration_us;
-    bus_.publish<ipc::MsgId::StateChange>({ipc::SystemState::Executing, current_cmd_.cmd_id});
     bus_.publish<ipc::MsgId::MotorStatus>(
         {current_cmd_.cmd_id, current_cmd_.steps[0].speed_rpm, true});
   } else {
     active_ = false;
     bus_.publish<ipc::MsgId::MotorStatus>({current_cmd_.cmd_id, 0, false});
-    bus_.publish<ipc::MsgId::StateChange>({ipc::SystemState::Ready, current_cmd_.cmd_id});
     logger_.info("Motor sequence %u stopped immediately (zero duration or empty)",
                  current_cmd_.cmd_id);
   }
@@ -53,7 +51,6 @@ void MotorService::advance_step() {
   } else {
     active_ = false;
     bus_.publish<ipc::MsgId::MotorStatus>({current_cmd_.cmd_id, 0, false});
-    bus_.publish<ipc::MsgId::StateChange>({ipc::SystemState::Ready, current_cmd_.cmd_id});
     logger_.info("Motor sequence %u complete", current_cmd_.cmd_id);
   }
 }
