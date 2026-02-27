@@ -19,7 +19,9 @@ target_include_directories(ipc PUBLIC src messages)
 # ── SIL application ───────────────────────────────────────────────────────────
 add_executable(sil_app src/main.cpp
     src/services/motor_service.cpp
-    src/services/log_service.cpp)
+    src/services/log_service.cpp
+    src/services/state_service.cpp
+    src/services/environment_service.cpp)
 target_link_libraries(sil_app PRIVATE ipc)
 
 
@@ -29,6 +31,7 @@ add_executable(generate_bindings generator/generate_bindings.cpp)
 target_include_directories(generate_bindings PRIVATE generator src messages)
 target_compile_options(generate_bindings PRIVATE -freflection)
 target_compile_definitions(generate_bindings PRIVATE REFLECT_DOCS)
+set_target_properties(generate_bindings PROPERTIES EXPORT_COMPILE_COMMANDS OFF)
 
 add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/tests/python/reflect_pytest/generated.py
@@ -47,13 +50,15 @@ add_executable(generate_docs generator/generate_docs.cpp)
 target_include_directories(generate_docs PRIVATE generator src messages)
 target_compile_options(generate_docs PRIVATE -freflection)
 target_compile_definitions(generate_docs PRIVATE REFLECT_DOCS)
+set_target_properties(generate_docs PROPERTIES EXPORT_COMPILE_COMMANDS OFF)
 
 add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/doc/README.md
+    OUTPUT ${CMAKE_SOURCE_DIR}/doc/README.md ${CMAKE_SOURCE_DIR}/doc/ipc_flow.dot ${CMAKE_SOURCE_DIR}/doc/ipc_flow.svg
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/doc
-    COMMAND generate_docs > ${CMAKE_SOURCE_DIR}/doc/README.md
+    COMMAND generate_docs ${CMAKE_SOURCE_DIR}/doc > ${CMAKE_SOURCE_DIR}/doc/README.md
+    COMMAND dot -Tsvg ${CMAKE_SOURCE_DIR}/doc/ipc_flow.dot -o ${CMAKE_SOURCE_DIR}/doc/ipc_flow.svg
     DEPENDS generate_docs
-    COMMENT "Generating IPC protocol Markdown documentation..."
+    COMMENT "Generating IPC protocol documentation (Markdown, DOT, and SVG)..."
 )
 
 add_custom_target(protocol_docs ALL

@@ -2,24 +2,26 @@
 #include <cmath>
 #include <mutex>
 
+#include "autonomous_msgs.h"
 #include "component.h"
 #include "component_logger.h"
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "simulation_msgs.h"
 
 namespace sil {
 
 class DOC_DESC("Thermal Service") ThermalService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::EnvironmentData,
-                                  ipc::MsgId::ThermalRequest, ipc::MsgId::ResetRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::ThermalData>;
+  using Subscribes =
+      ipc::MsgList<MsgId::PhysicsTick, MsgId::EnvironmentData, MsgId::ThermalRequest>;
+  using Publishes = ipc::MsgList<MsgId::ThermalData>;
 
   explicit ThermalService(ipc::MessageBus& bus) : bus_(bus), logger_("thermal") {
     ipc::bind_subscriptions(bus_, this);
   }
 
-  void on_message(const ipc::PhysicsTickPayload& tick) {
+  void on_message(const PhysicsTickPayload& tick) {
     std::lock_guard lk{mu_};
     float dt_s = tick.dt_us / 1e6f;
 
@@ -42,26 +44,30 @@ class DOC_DESC("Thermal Service") ThermalService {
     }
   }
 
-  void on_message(const ipc::EnvironmentPayload& env) {
+  void on_message(const EnvironmentPayload& env) {
     std::lock_guard lk{mu_};
     ambient_temp_c_ = env.ambient_temp_c;
   }
 
-  void on_message(const ipc::ResetRequestPayload&) {
-    std::lock_guard lk{mu_};
-    motor_temp_c_ = ambient_temp_c_;
-    battery_temp_c_ = ambient_temp_c_;
-    logger_.info("Thermal state reset");
-  }
-
-  void on_message(const ipc::ThermalRequestPayload&) {
-    ipc::ThermalPayload p{};
+  void on_message(const ThermalRequestPayload&) {
+    ThermalPayload p{};
     {
       std::lock_guard lk{mu_};
       p.motor_temp_c = motor_temp_c_;
       p.battery_temp_c = battery_temp_c_;
     }
-    bus_.publish<ipc::MsgId::ThermalData>(p);
+    bus_.publish<MsgId::ThermalData>(p);
+  }
+
+ private:
+  void publish_data() {
+    ThermalPayload p{};
+    {
+      std::lock_guard lk{mu_};
+      p.motor_temp_c = motor_temp_c_;
+      p.battery_temp_c = battery_temp_c_;
+    }
+    bus_.publish<MsgId::ThermalData>(p);
   }
 
  private:

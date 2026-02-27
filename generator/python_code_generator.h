@@ -8,9 +8,10 @@
 #include <string_view>
 #include <type_traits>
 
+#include "autonomous_msgs.h"
 #include "common.h"
-#include "messages.h"
-#include "traits.h"
+#include "core_msgs.h"
+#include "simulation_msgs.h"
 
 using namespace std::string_view_literals;
 
@@ -121,12 +122,14 @@ void generate_struct(std::set<std::string>& visited) {
   if (desc.text[0] != '\0') {
     std::cout << "    \"\"\"" << desc.text << "\"\"\"\n";
   }
+  std::cout << "    WIRE_SIZE = " << sizeof(T) << "\n";
 
   std::string pack_args;
   std::string pack_fmt = "<";
   std::string pack_instructions = "        data = bytearray()\n";
   std::string unpack_instructions = "        offset = 0\n";
   std::string unpack_args;
+  std::size_t current_offset = 0;
 
   auto flush_format = [&]() {
     if (pack_fmt != "<") {
@@ -134,8 +137,7 @@ void generate_struct(std::set<std::string>& visited) {
           "        data.extend(struct.pack(\"" + pack_fmt + "\", " + pack_args + "))\n";
       // If there is only one variable being unpacked, struct.unpack_from returns a 1-element tuple,
       // so we must extract it.
-      bool is_single_val =
-          (unpack_args.find(',') == std::string::npos) && (pack_fmt.find('s') == std::string::npos);
+      bool is_single_val = (unpack_args.find(',') == std::string::npos);
       if (is_single_val) {
         unpack_instructions += "        " + unpack_args + " = struct.unpack_from(\"" + pack_fmt +
                                "\", data, offset)[0]\n";
@@ -159,6 +161,10 @@ void generate_struct(std::set<std::string>& visited) {
 
         std::string field_name{std::meta::identifier_of(field)};
         constexpr auto field_desc = get_desc<field>();
+
+        // calculate padding
+        constexpr auto off = std::meta::offset_of(field);
+        constexpr std::size_t field_offset = off.bytes;
 
         // Type Hint & Docstring
         if constexpr (is_std_array<FT>::value) {
@@ -189,6 +195,13 @@ void generate_struct(std::set<std::string>& visited) {
           std::cout << "    \"\"\"" << field_desc.text << "\"\"\"\n";
         }
 
+        // Handle Padding
+        if (field_offset > current_offset) {
+          std::size_t pad = field_offset - current_offset;
+          pack_fmt += std::to_string(pad) + "x";
+          current_offset += pad;
+        }
+
         // Pack & Unpack Generation logic
         if constexpr (is_std_array<FT>::value) {
           using ElemT = typename FT::value_type;
@@ -203,6 +216,7 @@ void generate_struct(std::set<std::string>& visited) {
 
             if (!unpack_args.empty()) unpack_args += ", ";
             unpack_args += field_name;
+            current_offset += N_elems;
           } else {
             flush_format();
             // Complex Struct Array
@@ -219,13 +233,12 @@ void generate_struct(std::set<std::string>& visited) {
 
             unpack_instructions += "        " + field_name + " = []\n";
             unpack_instructions += "        for _ in range(" + std::to_string(N_elems) + "):\n";
-            unpack_instructions +=
-                "            sub_size = len(" + sub_type + "().pack_wire()) if hasattr(" +
-                sub_type + ", 'pack_wire') else struct.calcsize(" + sub_type + ".SUBCMD_FMT)\n";
+            unpack_instructions += "            sub_size = " + sub_type + ".WIRE_SIZE\n";
             unpack_instructions +=
                 "            item = " + sub_type + ".unpack_wire(data[offset:offset+sub_size])\n";
             unpack_instructions += "            " + field_name + ".append(item)\n";
             unpack_instructions += "            offset += sub_size\n";
+            current_offset += (N_elems * sizeof(ElemT));
           }
         } else if constexpr (std::is_array_v<FT>) {
           using ElemT = std::remove_all_extents_t<FT>;
@@ -240,6 +253,7 @@ void generate_struct(std::set<std::string>& visited) {
 
             if (!unpack_args.empty()) unpack_args += ", ";
             unpack_args += field_name;
+            current_offset += N_elems;
           } else {
             flush_format();
             // Complex Struct Array
@@ -260,25 +274,23 @@ void generate_struct(std::set<std::string>& visited) {
 
             unpack_instructions += "        " + field_name + " = []\n";
             unpack_instructions += "        for _ in range(" + std::to_string(N_elems) + "):\n";
-            unpack_instructions +=
-                "            sub_size = len(" + sub_type + "().pack_wire()) if hasattr(" +
-                sub_type + ", 'pack_wire') else struct.calcsize(" + sub_type + ".SUBCMD_FMT)\n";
+            unpack_instructions += "            sub_size = " + sub_type + ".WIRE_SIZE\n";
             unpack_instructions +=
                 "            item = " + sub_type + ".unpack_wire(data[offset:offset+sub_size])\n";
             unpack_instructions += "            " + field_name + ".append(item)\n";
             unpack_instructions += "            offset += sub_size\n";
+            current_offset += (N_elems * sizeof(ElemT));
           }
         } else if constexpr (std::is_class_v<FT>) {
           flush_format();
           std::string sub_type = get_python_type_name<FT>();
           pack_instructions += "        data.extend(self." + field_name + ".pack_wire())\n";
 
-          unpack_instructions +=
-              "        sub_size = len(" + sub_type + "().pack_wire()) if hasattr(" + sub_type +
-              ", 'pack_wire') else struct.calcsize(" + sub_type + ".SUBCMD_FMT)\n";
+          unpack_instructions += "        sub_size = " + sub_type + ".WIRE_SIZE\n";
           unpack_instructions += "        " + field_name + " = " + sub_type +
                                  ".unpack_wire(data[offset:offset+sub_size])\n";
           unpack_instructions += "        offset += sub_size\n";
+          current_offset += sizeof(FT);
         } else {
           // POD Primitives
           pack_fmt += get_struct_format_char<type>();
@@ -287,9 +299,17 @@ void generate_struct(std::set<std::string>& visited) {
 
           if (!unpack_args.empty()) unpack_args += ", ";
           unpack_args += field_name;
+          current_offset += sizeof(FT);
         }
       }());
     }(std::make_index_sequence<N>{});
+
+    // Handle trailing padding
+    if (sizeof(T) > current_offset) {
+      std::size_t pad = sizeof(T) - current_offset;
+      pack_fmt += std::to_string(pad) + "x";
+      current_offset += pad;
+    }
 
     flush_format();
   } else {
@@ -337,9 +357,8 @@ struct payload_or_void {
 };
 
 template <uint32_t Id>
-struct payload_or_void<
-    Id, std::void_t<typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload>> {
-  using type = typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload;
+struct payload_or_void<Id, std::void_t<typename MessageTraits<static_cast<MsgId>(Id)>::Payload>> {
+  using type = typename MessageTraits<static_cast<MsgId>(Id)>::Payload;
 };
 
 template <uint32_t Id>
@@ -353,8 +372,8 @@ void generate_struct_for_msg_id(std::set<std::string>& visited) {
 template <typename ActualT, uint32_t Id>
 void emit_metadata_for_actual_type() {
   std::string class_name = get_python_type_name<ActualT>();
-  std::cout << "    MsgId." << ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::name << ": "
-            << class_name << ",\n";
+  std::cout << "    MsgId." << MessageTraits<static_cast<MsgId>(Id)>::name << ": " << class_name
+            << ",\n";
 }
 
 template <uint32_t Id>
@@ -369,7 +388,7 @@ template <uint32_t Id>
 void emit_size_for_msg_id() {
   using T = typename payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
-    std::cout << "    MsgId." << ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::name << ": "
-              << sizeof(T) << ",\n";
+    std::cout << "    MsgId." << MessageTraits<static_cast<MsgId>(Id)>::name << ": " << sizeof(T)
+              << ",\n";
   }
 }

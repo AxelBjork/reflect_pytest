@@ -5,8 +5,9 @@
 
 #include "component.h"
 #include "component_logger.h"
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "simulation_msgs.h"
 
 namespace sil {
 
@@ -25,15 +26,14 @@ class DOC_DESC(
     "$$ V \\mathrel{-}= I \\times R_{int} \\times dt $$\n\n"
     "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$") PowerService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::PowerRequest,
-                                  ipc::MsgId::StateChange, ipc::MsgId::ResetRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::PowerData>;
+  using Subscribes = ipc::MsgList<MsgId::PhysicsTick, MsgId::PowerRequest, MsgId::MotorStatus>;
+  using Publishes = ipc::MsgList<MsgId::PowerData>;
 
   explicit PowerService(ipc::MessageBus& bus) : bus_(bus), logger_("power") {
     ipc::bind_subscriptions(bus_, this);
   }
 
-  void on_message(const ipc::PhysicsTickPayload& tick) {
+  void on_message(const PhysicsTickPayload& tick) {
     std::lock_guard lk{mu_};
     float dt_s = tick.dt_us / 1e6f;
     current_a_ = std::abs(tick.speed_rpm) * K_RPM_TO_AMPS;
@@ -41,6 +41,7 @@ class DOC_DESC(
     voltage_v_ = std::max(V_MIN, voltage_v_ - dv);
     soc_ = static_cast<uint8_t>(
         std::clamp((voltage_v_ - V_MIN) / (V_MAX - V_MIN) * 100.0f, 0.0f, 100.0f));
+    cmd_id_ = tick.cmd_id;
 
     // Log every 100 ticks (approx 1s)
     static uint32_t count = 0;
@@ -49,25 +50,16 @@ class DOC_DESC(
     }
   }
 
-  void on_message(const ipc::StateChangePayload& sc) {
+  void on_message(const MotorStatusPayload& ms) {
     std::lock_guard lk{mu_};
-    cmd_id_ = sc.cmd_id;
-    if (sc.state == ipc::SystemState::Ready) {
+    cmd_id_ = ms.cmd_id;
+    if (!ms.is_active) {
       current_a_ = 0.0f;
     }
   }
 
-  void on_message(const ipc::ResetRequestPayload&) {
-    std::lock_guard lk{mu_};
-    voltage_v_ = V_MAX;
-    current_a_ = 0.0f;
-    soc_ = 100;
-    cmd_id_ = 0;
-    logger_.info("Power state reset");
-  }
-
-  void on_message(const ipc::PowerRequestPayload&) {
-    ipc::PowerPayload p{};
+  void on_message(const PowerRequestPayload&) {
+    PowerPayload p{};
     {
       std::lock_guard lk{mu_};
       p.cmd_id = cmd_id_;
@@ -75,7 +67,7 @@ class DOC_DESC(
       p.current_a = current_a_;
       p.state_of_charge = soc_;
     }
-    bus_.publish<ipc::MsgId::PowerData>(p);
+    bus_.publish<MsgId::PowerData>(p);
   }
 
  private:

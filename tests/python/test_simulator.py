@@ -53,28 +53,15 @@ def send_sequence(udp: UdpClient, cmd_id: int,
 
 
 def query_kinematics(udp: UdpClient) -> KinematicsPayload:
-    drain_socket(udp)
+    udp.drain()
     udp.send_msg(MsgId.KinematicsRequest, KinematicsRequestPayload(reserved=0))
     return udp.recv_msg(expected_id=MsgId.KinematicsData)
 
 
 def query_power(udp: UdpClient) -> PowerPayload:
-    drain_socket(udp)
+    udp.drain()
     udp.send_msg(MsgId.PowerRequest, PowerRequestPayload(reserved=0))
     return udp.recv_msg(expected_id=MsgId.PowerData)
-
-
-def drain_socket(udp: UdpClient) -> None:
-    """Discard all buffered UDP packets so subsequent recv is fresh."""
-    old_timeout = udp._sock.gettimeout()
-    udp._sock.settimeout(0.0)
-    try:
-        while True:
-            udp._sock.recvfrom(4096)
-    except (BlockingIOError, TimeoutError):
-        pass
-    finally:
-        udp._sock.settimeout(old_timeout)
 
 
 def wait_for_sequence(udp: UdpClient,
@@ -85,13 +72,13 @@ def wait_for_sequence(udp: UdpClient,
     time.sleep(duration_us / 1e6 + slack)
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
-        drain_socket(udp)
+        udp.drain()
         try:
             udp.send_msg(MsgId.StateRequest,
                          StateRequestPayload(reserved=0))
             state_resp = udp.recv_msg(expected_id=MsgId.StateData)
             if state_resp and state_resp.state == SystemState.Ready:
-                drain_socket(udp)
+                udp.drain()
                 udp.send_msg(MsgId.KinematicsRequest,
                              KinematicsRequestPayload(reserved=0))
                 k = udp.recv_msg(expected_id=MsgId.KinematicsData)
@@ -109,7 +96,7 @@ def wait_executing(udp: UdpClient, timeout: float = 1.0) -> None:
     while time.monotonic() < deadline:
         time.sleep(0.01)
         try:
-            drain_socket(udp)
+            udp.drain()
             udp.send_msg(MsgId.StateRequest,
                          StateRequestPayload(reserved=0))
             resp = udp.recv_msg(expected_id=MsgId.StateData)

@@ -1,0 +1,159 @@
+digraph IPC {
+  rankdir=LR;
+  bgcolor="#0F172A";
+  pad=0.22;
+  nodesep=0.62;
+  ranksep=0.70;
+  splines=spline;
+  remincross=true;
+
+  fontname="Helvetica,Arial,sans-serif";
+  fontsize=52;
+  fontcolor="#F1F5F9";
+  label=<<B>System Architecture and Message Flow</B>>;
+  labelloc="t";
+
+  node [
+    fontname="Helvetica,Arial,sans-serif",
+    shape=rect,
+    style="filled,rounded",
+    fixedsize=false,
+    margin="0.12,0.08",
+    fontsize=28,
+    fontcolor="#FFFFFF",
+    penwidth=4,
+    color="#F1F5F9"
+  ];
+
+  edge [
+    fontname="Helvetica,Arial,sans-serif",
+    fontsize=22,
+    fontcolor="#CBD5E1",
+    color="#64748B",
+    penwidth=3.0,
+    arrowsize=1.4,
+    labelfloat=false,
+    labeldistance=0.8,
+    labelangle=10
+  ];
+
+  // --- Simulator ---
+  subgraph cluster_sim {
+    label=<<B><FONT POINT-SIZE="40">Simulator</FONT></B>>;
+    fontcolor="#F1F5F9";
+    style="rounded,filled";
+    color="#475569";
+    penwidth=4;
+    fillcolor="#1E293B";
+    margin=34;
+    MotorService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">MotorService</FONT></B><BR/><FONT POINT-SIZE="24">Reactive service that executes motor<BR/>command sequences.</FONT>>
+    ];
+    KinematicsService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">KinematicsService</FONT></B><BR/><FONT POINT-SIZE="24">Simulates vehicle motion by integrating<BR/>motor RPM over time to track position<BR/>and linear velocity.</FONT>>
+    ];
+    PowerService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">PowerService</FONT></B><BR/><FONT POINT-SIZE="24">Models a simple battery pack dynamically<BR/>responding to motor load.</FONT>>
+    ];
+    StateService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">StateService</FONT></B><BR/><FONT POINT-SIZE="24">Maintains the central lifecycle state<BR/>machine and the master simulation clock.</FONT>>
+    ];
+    ThermalService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">ThermalService</FONT></B><BR/><FONT POINT-SIZE="24">Thermal Service</FONT>>
+    ];
+    EnvironmentService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">EnvironmentService</FONT></B><BR/><FONT POINT-SIZE="24">Centralized service for managing<BR/>environmental simulation data.</FONT>>
+    ];
+    AutonomousService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">AutonomousService</FONT></B><BR/><FONT POINT-SIZE="24">High level autonomous driving service.</FONT>>
+    ];
+    LogService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">LogService</FONT></B><BR/><FONT POINT-SIZE="24">Asynchronous logging sink.</FONT>>
+    ];
+    UdpBridge [
+      fillcolor="#0F766E",
+      label=<<B><FONT POINT-SIZE="38">UdpBridge</FONT></B><BR/><FONT POINT-SIZE="26">Message Distribution Hub</FONT>>
+    ];
+  }
+
+  // --- Network Layer bounding box (TX/RX) ---
+  subgraph cluster_sockets {
+    label=<<B><FONT POINT-SIZE="40">Network Layer</FONT></B>>;
+    fontcolor="#F1F5F9";
+    style="rounded,filled";
+    color="#F59E0B";
+    penwidth=6;
+    fillcolor="#2A1B07";
+    margin=24;
+
+    { rank=same; TX; RX; }
+
+    TX [
+      fillcolor="#B45309",
+      label=<<B><FONT POINT-SIZE="30">TX Socket</FONT></B><BR/><FONT POINT-SIZE="24">Port 9000 (SIL Inbound)</FONT>>
+    ];
+    RX [
+      fillcolor="#B45309",
+      label=<<B><FONT POINT-SIZE="30">RX Socket</FONT></B><BR/><FONT POINT-SIZE="24">Port 9001 (SIL Outbound)</FONT>>
+    ];
+
+    TX -> RX [style=invis, weight=50, constraint=false];
+  }
+
+  // --- Test Harness bounding box ---
+  subgraph cluster_fixtures {
+    label=<<B><FONT POINT-SIZE="40">Test Harness</FONT></B>>;
+    fontcolor="#F1F5F9";
+    style="rounded,filled";
+    color="#22C55E";
+    penwidth=6;
+    fillcolor="#0B2A20";
+    margin=24;
+
+    TestCase [
+      fillcolor="#047857",
+      label=<<B><FONT POINT-SIZE="34">Test Case / Fixtures</FONT></B>>
+    ];
+  }
+
+  TestCase -> TX [label="send_msg", color="#F1F5F9", penwidth=5];
+  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nKinematicsData, KinematicsRequest\nMotorSequence, PowerData\nPowerRequest, StateRequest\nThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
+
+  // Internal Simulator Logic
+  AutonomousService -> EnvironmentService [label="InternalEnvRequest", style=dashed];
+  AutonomousService -> UdpBridge [label="AutoDriveStatus, KinematicsRequest\nMotorSequence, PowerRequest", style=dashed];
+  EnvironmentService -> AutonomousService [label="InternalEnvData", style=dashed];
+  EnvironmentService -> UdpBridge [label="EnvironmentAck, EnvironmentRequest", style=dashed];
+  KinematicsService -> UdpBridge [label="KinematicsData", style=dashed];
+  LogService -> UdpBridge [label="Log", style=dashed];
+  MotorService -> KinematicsService [label="MotorStatus", style=dashed];
+  MotorService -> PowerService [label="MotorStatus", style=dashed];
+  MotorService -> StateService [label="MotorStatus", style=dashed];
+  PowerService -> UdpBridge [label="PowerData", style=dashed];
+  StateService -> AutonomousService [label="PhysicsTick", style=dashed];
+  StateService -> KinematicsService [label="PhysicsTick", style=dashed];
+  StateService -> MotorService [label="PhysicsTick", style=dashed];
+  StateService -> PowerService [label="PhysicsTick", style=dashed];
+  StateService -> ThermalService [label="PhysicsTick", style=dashed];
+  StateService -> UdpBridge [label="StateData", style=dashed];
+  ThermalService -> UdpBridge [label="ThermalData", style=dashed];
+  UdpBridge -> AutonomousService [label="AutoDriveCommand, KinematicsData\nPowerData", style=dashed];
+  UdpBridge -> EnvironmentService [label="EnvironmentData", style=dashed];
+  UdpBridge -> KinematicsService [label="KinematicsRequest", style=dashed];
+  UdpBridge -> MotorService [label="MotorSequence", style=dashed];
+  UdpBridge -> PowerService [label="PowerRequest", style=dashed];
+  UdpBridge -> StateService [label="StateRequest", style=dashed];
+  UdpBridge -> ThermalService [label="EnvironmentData, ThermalRequest", style=dashed];
+
+  // Flow: Simulator -> Network -> Test Harness
+  RX -> UdpBridge [label="Outbound Traffic:\nAutoDriveStatus, EnvironmentAck\nEnvironmentRequest, KinematicsData\nKinematicsRequest, Log\nMotorSequence, PowerData\nPowerRequest, StateData\nThermalData", color="#F1F5F9", penwidth=5, dir=back, fontsize=25, arrowtail=normal];
+  TestCase -> RX [label="recv_msg", color="#F1F5F9", penwidth=5, dir=back, arrowtail=normal];
+}

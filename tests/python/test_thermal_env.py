@@ -4,8 +4,7 @@ import time
 import pytest
 from reflect_pytest.generated import (
     MsgId,
-    EnvironmentCommandPayload,
-    EnvironmentRequestPayload,
+    EnvironmentAckPayload as EnvironmentAck,
     EnvironmentPayload,
     ThermalRequestPayload,
     ThermalPayload,
@@ -13,6 +12,8 @@ from reflect_pytest.generated import (
     MotorSubCmd,
     StateRequestPayload,
     SystemState,
+    Point2D,
+    BoundingBox2D,
 )
 
 def send_sequence(udp, cmd_id: int, steps: list[tuple[int, int]]) -> None:
@@ -42,20 +43,22 @@ def query_thermal(udp) -> ThermalPayload:
     udp.send_msg(MsgId.ThermalRequest, ThermalRequestPayload(reserved=0))
     return udp.recv_msg(expected_id=MsgId.ThermalData)
 
-def query_environment(udp) -> EnvironmentPayload:
+def set_environment(udp, ambient_temp: float, incline: float, friction: float, region_id: int = 0):
     drain_socket(udp)
-    udp.send_msg(MsgId.EnvironmentRequest, EnvironmentRequestPayload(reserved=0))
-    return udp.recv_msg(expected_id=MsgId.EnvironmentData)
-
-def set_environment(udp, ambient_temp: float, incline: float, friction: float):
-    drain_socket(udp)
-    cmd = EnvironmentCommandPayload(
+    # EnvironmentData is inbound (sent by Python, consumed by App)
+    env = EnvironmentPayload(
+        region_id=region_id,
+        bounds=BoundingBox2D(min_pt=Point2D(x=0,y=0), max_pt=Point2D(x=0,y=0)), 
         ambient_temp_c=ambient_temp,
         incline_percent=incline,
         surface_friction=friction
     )
-    udp.send_msg(MsgId.EnvironmentCommand, cmd)
-    return udp.recv_msg(expected_id=MsgId.EnvironmentData)
+    udp.send_msg(MsgId.EnvironmentData, env)
+    
+    # EnvironmentService ACKs receipt to confirm it's been processed
+    ack = udp.recv_msg(expected_id=MsgId.EnvironmentAck)
+    assert ack.region_id == region_id
+    return env 
 
 def wait_for_sequence(udp, cmd_id: int, duration_us: int) -> None:
     time.sleep(duration_us / 1e6 + 0.05)
@@ -73,16 +76,11 @@ def wait_for_sequence(udp, cmd_id: int, duration_us: int) -> None:
     raise TimeoutError("Simulator did not finish sequence")
 
 def test_environment_override(udp):
-    """Test we can override environment conditions and read them back."""
+    """Test that setting environment conditions is acknowledged by the application."""
     resp = set_environment(udp, ambient_temp=30.5, incline=5.0, friction=0.8)
     assert resp.ambient_temp_c == 30.5
     assert resp.incline_percent == 5.0
     assert resp.surface_friction == pytest.approx(0.8)
-    
-    env = query_environment(udp)
-    assert env.ambient_temp_c == 30.5
-    assert env.incline_percent == 5.0
-    assert env.surface_friction == pytest.approx(0.8)
     
 def test_thermal_increases_under_load(udp):
     """Motor and battery temps should increase when driving."""

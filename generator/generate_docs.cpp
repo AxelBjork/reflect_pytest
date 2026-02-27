@@ -1,9 +1,7 @@
 // generate_docs.cpp — Standalone executable that reflects over ipc:: messages
 // and emits a GitHub-renderable Markdown documentation file.
-//
-// Build:  cmake --build build --target generate_docs
-// Run:    ./build/generate_docs > build/doc/README.md
-//         (CMake custom command does this automatically)
+
+#include <filesystem>
 
 #include "app_components.h"
 #include "doc_generator.h"
@@ -11,33 +9,15 @@
 // Combine all sil_app services plus the virtual main publisher thread
 using AllComponents = decltype(std::tuple_cat(std::declval<sil::AppServices>()));
 
-void emit_toc() {
-  [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-    (..., [] {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, get_enum_size<ipc::MsgId>()>::arr[Is];
-      constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      using T = typename doc_payload_or_void<val>::type;
-      if constexpr (!std::is_void_v<T>) {
-        constexpr auto mid = static_cast<ipc::MsgId>(val);
-        constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
-        const std::string sname = cpp_type_name_str<T>();
-        std::string link = "msgid" + std::string(mname) + "-" + sname;
-        for (auto& c : link) c = std::tolower(c);
-        std::cout << "- [`" << mname << "`](#" << link << ")\n";
-      }
-    }());
-  }(std::make_index_sequence<get_enum_size<ipc::MsgId>()>{});
-}
-
 template <typename Components>
 void emit_payloads() {
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, get_enum_size<ipc::MsgId>()>::arr[Is];
+      constexpr auto e = EnumArrHolder<MsgId, get_enum_size<MsgId>()>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       emit_md_payload_section_for_msg_id<Components, val>();
     }());
-  }(std::make_index_sequence<get_enum_size<ipc::MsgId>()>{});
+  }(std::make_index_sequence<get_enum_size<MsgId>()>{});
 }
 
 template <typename Components>
@@ -56,7 +36,14 @@ void emit_components() {
   }(std::make_index_sequence<num_components>{});
 }
 
-int main() {
+int main(int argc, char** argv) {
+  namespace fs = std::filesystem;
+  fs::path out_dir = ".";
+  if (argc > 1) {
+    out_dir = argv[1];
+  }
+  fs::path dot_path = out_dir / "ipc_flow.dot";
+
   // ── Front-matter & module overview ─────────────────────────────────────────
 
   std::cout <<
@@ -102,21 +89,23 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module to orchestrate test cases, `Network` maps the transport layer across two explicit sockets (`Client -> App` and `App -> Client`), and `Simulator` processes the messages internally.
 
+![IPC Flow Diagram](ipc_flow.svg)
+
 )";
 
-  emit_mermaid_flow<AllComponents>();
+  // Emits the DOT file (for tooling) and also prints the DOT source into the Markdown.
+  // Typical render: dot -Tsvg <dot_path> -o <svg_path>
+  emit_graphviz_flow_markdown<AllComponents>(dot_path.string());
 
   // ── Services & Components ───────────────────────────────────────────────────
   std::cout << "---\n\n## Component Services\n\n";
   std::cout << "The application is composed of the following services:\n\n";
   emit_components<AllComponents>();
 
-  // ── Message Payloads & TOC ──────────────────────────────────────────────────
+  // ── Message Payloads ──────────────────────────────────────────────────
   std::cout << "---\n\n## Message Payloads\n\n";
 
-  emit_toc();
-
-  std::cout << "\nEach section corresponds to one `MsgId` enumerator. "
+  std::cout << "Each section corresponds to one `MsgId` enumerator. "
                "The **direction badge** shows which side initiates the message.\n\n";
 
   emit_payloads<AllComponents>();

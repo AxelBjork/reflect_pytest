@@ -35,7 +35,15 @@ def test_bridge_enforcement(udp):
         # If it were allowed, StateService would respond with StateData
         udp.recv_msg(expected_id=MsgId.StateData)
 
-    # 4. Final Sanity: Still operational
+    # 4. Blocked External Message (EnvRequest)
+    # The bridge should no longer publish EnvRequest from external sources
+    from reflect_pytest.generated import EnvironmentRequestPayload, Point2D
+    udp.send_msg(MsgId.EnvironmentRequest, EnvironmentRequestPayload(target_location=Point2D(0,0)))
+    with pytest.raises(TimeoutError):
+        # If it were allowed, EnvironmentService used to respond with EnvironmentData
+        udp.recv_msg(expected_id=MsgId.EnvironmentData)
+
+    # 5. Final Sanity: Still operational
     udp._sock.settimeout(0.1)
     udp.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
     assert udp.recv_msg(expected_id=MsgId.StateData) is not None

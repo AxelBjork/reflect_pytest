@@ -3,8 +3,9 @@
 #include <cstdarg>
 #include <cstdio>
 
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "msg_base.h"
 
 namespace sil {
 
@@ -27,7 +28,7 @@ class ComponentLogger {
   const char* name_;
   static LogService* sink_;
 
-  void log_valist(ipc::Severity severity, const char* fmt, va_list args) const;
+  void log_valist(Severity severity, const char* fmt, va_list args) const;
 };
 
 }  // namespace sil

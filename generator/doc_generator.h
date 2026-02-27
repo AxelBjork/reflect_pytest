@@ -5,8 +5,10 @@
 // Companion to python_code_generator.h; included only by generate_docs.cpp.
 
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <meta>
 #include <set>
@@ -14,10 +16,11 @@
 #include <string_view>
 #include <type_traits>
 
+#include "autonomous_msgs.h"
 #include "common.h"
 #include "component.h"
-#include "messages.h"
-#include "traits.h"
+#include "core_msgs.h"
+#include "simulation_msgs.h"
 
 using namespace std::string_view_literals;
 
@@ -35,12 +38,12 @@ std::string cpp_type_name_str();
 // Component Sub/Pub Helpers
 // -------------------------------------------------------------------------------------------------
 
-template <ipc::MsgId Id>
+template <MsgId Id>
 consteval bool contains_msg(ipc::MsgList<>) {
   return false;
 }
 
-template <ipc::MsgId Id, ipc::MsgId First, ipc::MsgId... Rest>
+template <MsgId Id, MsgId First, MsgId... Rest>
 consteval bool contains_msg(ipc::MsgList<First, Rest...>) {
   if constexpr (Id == First)
     return true;
@@ -48,67 +51,67 @@ consteval bool contains_msg(ipc::MsgList<First, Rest...>) {
     return contains_msg<Id>(ipc::MsgList<Rest...>{});
 }
 
-template <typename Component, ipc::MsgId Id>
+template <typename Component, MsgId Id>
 consteval bool component_subscribes() {
   return contains_msg<Id>(typename Component::Subscribes{});
 }
 
-template <typename Component, ipc::MsgId Id>
+template <typename Component, MsgId Id>
 consteval bool component_publishes() {
   return contains_msg<Id>(typename Component::Publishes{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool internal_cxx_subscribes_impl(std::index_sequence<Is...>) {
   return ((component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() &&
            !std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool internal_cxx_subscribes() {
   return internal_cxx_subscribes_impl<Tuple, Id>(
       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool internal_cxx_publishes_impl(std::index_sequence<Is...>) {
   return ((component_publishes<std::tuple_element_t<Is, Tuple>, Id>() &&
            !std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool internal_cxx_publishes() {
   return internal_cxx_publishes_impl<Tuple, Id>(
       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool py_subscribes_impl(std::index_sequence<Is...>) {
   return ((component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() &&
            std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool py_subscribes() {
   return py_subscribes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool py_publishes_impl(std::index_sequence<Is...>) {
   return ((component_publishes<std::tuple_element_t<Is, Tuple>, Id>() &&
            std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool py_publishes() {
   return py_publishes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 bool print_subscribers_impl(std::index_sequence<Is...>) {
   bool first = true;
   (..., [&]() {
@@ -126,12 +129,12 @@ bool print_subscribers_impl(std::index_sequence<Is...>) {
   return true;
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 bool print_subscribers() {
   return print_subscribers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 bool print_publishers_impl(std::index_sequence<Is...>) {
   bool first = true;
   (..., [&]() {
@@ -149,7 +152,7 @@ bool print_publishers_impl(std::index_sequence<Is...>) {
   return true;
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 bool print_publishers() {
   return print_publishers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
@@ -364,15 +367,15 @@ struct doc_payload_or_void {
 
 template <uint32_t Id>
 struct doc_payload_or_void<
-    Id, std::void_t<typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload>> {
-  using type = typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload;
+    Id, std::void_t<typename MessageTraits<static_cast<MsgId>(Id)>::Payload>> {
+  using type = typename MessageTraits<static_cast<MsgId>(Id)>::Payload;
 };
 
 template <typename Components, typename Payload, uint32_t Id>
 void emit_md_payload_section() {
   constexpr auto R = ^^Payload;
-  constexpr auto mid = static_cast<ipc::MsgId>(Id);
-  constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
+  constexpr auto mid = static_cast<MsgId>(Id);
+  constexpr std::string_view mname = MessageTraits<mid>::name;
   constexpr doc::Desc desc = get_desc<R>();
   std::string sname;
   if constexpr (std::meta::has_identifier(R)) {
@@ -380,7 +383,10 @@ void emit_md_payload_section() {
   } else {
     sname = get_cxx_type_name<Payload>();
   }
-  std::cout << "### `MsgId::" << mname << "` (`" << sname << "`)\n\n";
+
+  std::cout << "<details>\n";
+  std::cout << "<summary><font size=\"+1\"><b>MsgId::" << mname << " (" << sname
+            << ")</b></font></summary>\n\n";
   if (desc.text[0] != '\0') std::cout << "> " << desc.text << "\n\n";
 
   constexpr bool cxx_sub = internal_cxx_subscribes<Components, mid>();
@@ -418,6 +424,7 @@ void emit_md_payload_section() {
 
   std::set<std::string> visited;
   emit_field_table<Payload>(visited);
+  std::cout << "</details>\n\n";
 }
 
 // Emit a full payload section (heading + description + field table) for one MsgId.
@@ -429,219 +436,404 @@ void emit_md_payload_section_for_msg_id() {
   }
 }
 
+#include <map>
+
 // -------------------------------------------------------------------------------------------------
-// Mermaid message-flow diagram
+// Graphviz DOT message-flow diagram
 // -------------------------------------------------------------------------------------------------
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void mermaid_inbound_edges_impl(std::index_sequence<Is...>, std::string_view mname) {
-  bool first = true;
+inline std::string dot_escape_label(std::string_view s) {
+  std::string out;
+  out.reserve(s.size() + 16);
+  for (char ch : s) {
+    switch (ch) {
+      case '\\':
+        out += "\\\\";
+        break;
+      case '"':
+        out += "\\\"";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        break;
+      default:
+        out.push_back(ch);
+        break;
+    }
+  }
+  return out;
+}
+
+inline std::string html_escape(std::string_view s) {
+  std::string out;
+  for (char c : s) {
+    switch (c) {
+      case '&':
+        out += "&amp;";
+        break;
+      case '<':
+        out += "&lt;";
+        break;
+      case '>':
+        out += "&gt;";
+        break;
+      case '"':
+        out += "&quot;";
+        break;
+      case '\'':
+        out += "&apos;";
+        break;
+      case '\n':
+        out += "<BR/>";
+        break;
+      default:
+        out += c;
+        break;
+    }
+  }
+  return out;
+}
+
+inline std::string dot_id(std::string_view s) {
+  std::string out;
+  out.reserve(s.size() + 1);
+  for (char ch : s) {
+    unsigned char uc = static_cast<unsigned char>(ch);
+    if (std::isalnum(uc))
+      out.push_back(ch);
+    else
+      out.push_back('_');
+  }
+  if (out.empty() || std::isdigit(static_cast<unsigned char>(out[0]))) out.insert(out.begin(), '_');
+  return out;
+}
+
+inline std::string first_sentence(std::string_view s) {
+  auto dot = s.find('.');
+  if (dot == std::string_view::npos) return std::string(s);
+  return std::string(s.substr(0, dot + 1));
+}
+
+inline std::string wrap_words(std::string_view s, std::size_t width = 45) {
+  std::string out;
+  std::string word;
+  std::size_t col = 0;
+  auto flush_word = [&] {
+    if (word.empty()) return;
+    if (col == 0) {
+      out += word;
+      col = word.size();
+    } else if (col + 1 + word.size() <= width) {
+      out.push_back(' ');
+      out += word;
+      col += 1 + word.size();
+    } else {
+      out.push_back('\n');
+      out += word;
+      col = word.size();
+    }
+    word.clear();
+  };
+  for (char ch : s) {
+    if (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t') {
+      flush_word();
+    } else {
+      word.push_back(ch);
+    }
+  }
+  flush_word();
+  return out;
+}
+
+// Edge aggregation: maps (src_id, dst_id) -> set of message names.
+using EdgeMap = std::map<std::pair<std::string, std::string>, std::set<std::string>>;
+
+template <typename Tuple, MsgId Id, std::size_t... Is>
+void collect_inbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
+                                std::string_view mname) {
+  const std::string ub = dot_id("UdpBridge");
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_subscribes<Comp, Id>()) {
-      std::string cname = cpp_type_name_str<Comp>();
-      if (cname != "UdpBridge") {
-        if (!first) {
-          std::cout << "\n        UdpBridge -->|" << mname << "| ";
-        }
-        std::cout << cname << "\n";
-        first = false;
-      }
+    if constexpr (component_subscribes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
+      edges[{ub, dot_id(cpp_type_name_str<Comp>())}].insert(std::string(mname));
     }
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id>
-void mermaid_inbound_edges(std::string_view mname) {
-  mermaid_inbound_edges_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
+template <typename Tuple, MsgId Id>
+void collect_inbound_edges(EdgeMap& edges, std::string_view mname) {
+  collect_inbound_edges_impl<Tuple, Id>(edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{},
                                         mname);
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void mermaid_outbound_edges_impl(std::index_sequence<Is...>, std::string_view mname) {
+template <typename Tuple, MsgId Id, std::size_t... Is>
+void collect_outbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
+                                 std::string_view mname) {
+  const std::string ub = dot_id("UdpBridge");
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_publishes<Comp, Id>()) {
-      std::string cname = cpp_type_name_str<Comp>();
-      if (cname != "UdpBridge") {
-        std::cout << "        " << cname << " -->|" << mname << "| UdpBridge\n";
-      }
+    if constexpr (component_publishes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
+      edges[{dot_id(cpp_type_name_str<Comp>()), ub}].insert(std::string(mname));
     }
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id>
-void mermaid_outbound_edges(std::string_view mname) {
-  mermaid_outbound_edges_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
-                                         mname);
+template <typename Tuple, MsgId Id>
+void collect_outbound_edges(EdgeMap& edges, std::string_view mname) {
+  collect_outbound_edges_impl<Tuple, Id>(
+      edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{}, mname);
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void mermaid_internal_edges_impl(std::index_sequence<Is...>, std::string_view mname,
-                                 const std::string& pub_name) {
+template <typename Tuple, MsgId Id, std::size_t... Is>
+void collect_internal_edges_impl(EdgeMap& edges, std::index_sequence<Is...>, std::string_view mname,
+                                 std::string_view pub_name) {
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_subscribes<Comp, Id>()) {
-      std::string sub_name = cpp_type_name_str<Comp>();
-      if (sub_name != "UdpBridge") {
-        std::cout << "        " << pub_name << " -.->|" << mname << "| " << sub_name << "\n";
-      }
+    if constexpr (component_subscribes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
+      edges[{dot_id(pub_name), dot_id(cpp_type_name_str<Comp>())}].insert(std::string(mname));
     }
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void mermaid_internal_edges_pub_impl(std::index_sequence<Is...>, std::string_view mname) {
+template <typename Tuple, MsgId Id, std::size_t... Is>
+void collect_internal_edges_pub_impl(EdgeMap& edges, std::index_sequence<Is...>,
+                                     std::string_view mname) {
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_publishes<Comp, Id>()) {
-      std::string pub_name = cpp_type_name_str<Comp>();
-      if (pub_name != "UdpBridge") {
-        mermaid_internal_edges_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
-                                               mname, pub_name);
-      }
+    if constexpr (component_publishes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
+      collect_internal_edges_impl<Tuple, Id>(edges,
+                                             std::make_index_sequence<std::tuple_size_v<Tuple>>{},
+                                             mname, cpp_type_name_str<Comp>());
     }
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id>
-void mermaid_internal_edges(std::string_view mname) {
-  mermaid_internal_edges_pub_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{},
-                                             mname);
+template <typename Tuple, MsgId Id>
+void collect_internal_edges(EdgeMap& edges, std::string_view mname) {
+  collect_internal_edges_pub_impl<Tuple, Id>(
+      edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{}, mname);
 }
 
 template <typename Components, uint32_t Id>
-void emit_mermaid_edge_for_msg_id(std::string& inbound, std::string& outbound, bool& first_in,
-                                  bool& first_out) {
+void collect_msg_edges(EdgeMap& edges, std::set<std::string>& inbound_msg_names,
+                       std::set<std::string>& outbound_msg_names) {
   using T = typename doc_payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
-    constexpr auto mid = static_cast<ipc::MsgId>(Id);
-    constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
-
+    constexpr auto mid = static_cast<MsgId>(Id);
+    constexpr std::string_view mname = MessageTraits<mid>::name;
     constexpr bool cxx_sub = internal_cxx_subscribes<Components, mid>();
     constexpr bool cxx_pub = internal_cxx_publishes<Components, mid>();
     constexpr bool py_sub = py_subscribes<Components, mid>();
     constexpr bool py_pub = py_publishes<Components, mid>();
 
     if (py_pub && cxx_sub && !cxx_pub && !py_sub) {
-      if (!first_in) inbound += "<br/>";
-      inbound += mname;
-      first_in = false;
-      std::cout << "        UdpBridge -->|" << mname << "| ";
-      mermaid_inbound_edges<Components, mid>(mname);
+      inbound_msg_names.insert(std::string(mname));
+      collect_inbound_edges<Components, mid>(edges, mname);
     } else if (cxx_pub && py_sub && !py_pub && !cxx_sub) {
-      if (!first_out) outbound += "<br/>";
-      outbound += mname;
-      first_out = false;
-      mermaid_outbound_edges<Components, mid>(mname);
+      outbound_msg_names.insert(std::string(mname));
+      collect_outbound_edges<Components, mid>(edges, mname);
     } else if ((py_pub || py_sub) && (cxx_pub || cxx_sub)) {
-      if (!first_in) inbound += "<br/>";
-      inbound += mname;
-      first_in = false;
-      std::cout << "        UdpBridge -->|" << mname << "| ";
-      mermaid_inbound_edges<Components, mid>(mname);
-
-      if (!first_out) outbound += "<br/>";
-      outbound += mname;
-      first_out = false;
-      mermaid_outbound_edges<Components, mid>(mname);
+      inbound_msg_names.insert(std::string(mname));
+      collect_inbound_edges<Components, mid>(edges, mname);
+      outbound_msg_names.insert(std::string(mname));
+      collect_outbound_edges<Components, mid>(edges, mname);
     } else if (!py_pub && !py_sub && cxx_pub && cxx_sub) {
-      mermaid_internal_edges<Components, mid>(mname);
+      collect_internal_edges<Components, mid>(edges, mname);
     }
   }
 }
 
 template <typename Components>
-void emit_mermaid_flow() {
-  constexpr std::size_t num_msgs = get_enum_size<ipc::MsgId>();
+void emit_graphviz_flow_dot(std::ostream& os) {
+  constexpr std::size_t num_msgs = get_enum_size<MsgId>();
 
-  std::cout << "```mermaid\nflowchart LR\n";
-  std::cout << "    %% ─── COLUMN 1: Pytest Test Harness ───\n";
-  std::cout << "    subgraph py[\"Pytest SIL Environment\"]\n";
-  std::cout << "        TestCase([\"Test Case / Fixtures\"])\n";
-  std::cout << "    end\n\n";
+  os << "digraph IPC {\n";
+  os << "  rankdir=LR;\n";
+  os << "  bgcolor=\"#0F172A\";\n";
+  os << "  pad=0.22;\n";
+  os << "  nodesep=0.62;\n";
+  os << "  ranksep=0.70;\n";
+  os << "  splines=spline;\n";
+  os << "  remincross=true;\n\n";
 
-  std::cout << "    %% ─── COLUMN 2: Python UDP Client & Kernel Routing ───\n";
-  std::cout << "    subgraph net[\"UdpClient (127.0.0.1)\"]\n";
-  std::cout << "        direction TB\n";
-  std::cout << "        TX([\"TX Socket<br/>Port 9000<br/>==============<br/>(sendto)\"])\n";
-  std::cout << "        RX([\"RX Socket<br/>Port 9001<br/>==============<br/>(recvfrom)\"])\n";
-  std::cout << "    end\n\n";
+  os << "  fontname=\"Helvetica,Arial,sans-serif\";\n";
+  os << "  fontsize=52;\n";
+  os << "  fontcolor=\"#F1F5F9\";\n";
+  os << "  label=<<B>System Architecture and Message Flow</B>>;\n";
+  os << "  labelloc=\"t\";\n\n";
 
-  std::cout << "    %% ─── COLUMN 3: C++ SUT ───\n";
-  std::cout << "    subgraph sim[\"Simulator\"]\n";
+  os << "  node [\n"
+     << "    fontname=\"Helvetica,Arial,sans-serif\",\n"
+     << "    shape=rect,\n"
+     << "    style=\"filled,rounded\",\n"
+     << "    fixedsize=false,\n"
+     << "    margin=\"0.12,0.08\",\n"
+     << "    fontsize=28,\n"
+     << "    fontcolor=\"#FFFFFF\",\n"
+     << "    penwidth=4,\n"
+     << "    color=\"#F1F5F9\"\n"
+     << "  ];\n\n";
+
+  os << "  edge [\n"
+     << "    fontname=\"Helvetica,Arial,sans-serif\",\n"
+     << "    fontsize=22,\n"
+     << "    fontcolor=\"#CBD5E1\",\n"
+     << "    color=\"#64748B\",\n"
+     << "    penwidth=3.0,\n"
+     << "    arrowsize=1.4,\n"
+     << "    labelfloat=false,\n"
+     << "    labeldistance=0.8,\n"
+     << "    labelangle=10\n"
+     << "  ];\n\n";
+
+  // Tier 1: Simulator Services
+  os << "  // --- Simulator ---\n";
+  os << "  subgraph cluster_sim {\n";
+  os << "    label=<<B><FONT POINT-SIZE=\"40\">Simulator</FONT></B>>;\n";
+  os << "    fontcolor=\"#F1F5F9\";\n";
+  os << "    style=\"rounded,filled\";\n";
+  os << "    color=\"#475569\";\n";
+  os << "    penwidth=4;\n";
+  os << "    fillcolor=\"#1E293B\";\n";
+  os << "    margin=34;\n";
+
+  const std::string ub_id = dot_id("UdpBridge");
 
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [&] {
       using Comp = std::tuple_element_t<Is, Components>;
       constexpr auto R = ^^Comp;
-      std::string cname = cpp_type_name_str<Comp>();
+      const std::string cname = cpp_type_name_str<Comp>();
 
-      std::cout << "        " << cname << "([\"" << cname;
-      constexpr auto desc = get_desc<R>();
-      if (desc.text[0] != '\0') {
-        std::cout << "<br/><br/>";
-        std::string desc_str{desc.text};
-
-        // Find the first period to extract just the first sentence
-        size_t dot_pos = desc_str.find('.');
-        if (dot_pos != std::string::npos) {
-          desc_str = desc_str.substr(0, dot_pos + 1);
-        }
-
-        // Word wrap using <br/> tags
-        std::string wrapped = "";
-        size_t current_line_len = 0;
-        size_t last_space = 0;
-
-        for (size_t i = 0; i < desc_str.length(); ++i) {
-          if (desc_str[i] == ' ') {
-            last_space = i;
-          }
-          wrapped += desc_str[i];
-          current_line_len++;
-
-          if (current_line_len > 35 && last_space != 0) {
-            // Replace the last space with <br/>
-            wrapped.replace(wrapped.length() - 1 - (i - last_space), 1, "<br/>");
-            current_line_len = i - last_space;
-            last_space = 0;
-          }
-        }
-        std::cout << wrapped;
+      if constexpr (std::is_same_v<Comp, ipc::UdpBridge>) {
+        os << "    " << ub_id << " [\n"
+           << "      fillcolor=\"#0F766E\",\n"
+           << "      label=<<B><FONT POINT-SIZE=\"38\">" << html_escape(cname)
+           << "</FONT></B><BR/><FONT POINT-SIZE=\"26\">Message Distribution Hub</FONT>>\n"
+           << "    ];\n";
+      } else {
+        std::string desc_text = wrap_words(first_sentence(get_desc<R>().text), 40);
+        if (desc_text.empty()) desc_text = cname;
+        os << "    " << dot_id(cname) << " [\n"
+           << "      fillcolor=\"#0369A1\",\n"
+           << "      label=<<B><FONT POINT-SIZE=\"30\">" << html_escape(cname)
+           << "</FONT></B><BR/><FONT POINT-SIZE=\"24\">" << html_escape(desc_text) << "</FONT>>\n"
+           << "    ];\n";
       }
-      std::cout << "\"])\n";
     }());
   }(std::make_index_sequence<std::tuple_size_v<Components>>{});
+  os << "  }\n\n";
 
-  std::cout << "        %% Bridge Distribution\n";
+  // Tier 2: Network Layer
+  os << "  // --- Network Layer bounding box (TX/RX) ---\n";
+  os << "  subgraph cluster_sockets {\n";
+  os << "    label=<<B><FONT POINT-SIZE=\"40\">Network Layer</FONT></B>>;\n";
+  os << "    fontcolor=\"#F1F5F9\";\n";
+  os << "    style=\"rounded,filled\";\n";
+  os << "    color=\"#F59E0B\";\n";
+  os << "    penwidth=6;\n";
+  os << "    fillcolor=\"#2A1B07\";\n";
+  os << "    margin=24;\n\n";
+  os << "    { rank=same; TX; RX; }\n\n";
 
-  std::string inbound_msgs = "";
-  std::string outbound_msgs = "";
-  bool first_in = true;
-  bool first_out = true;
+  os << "    TX [\n"
+     << "      fillcolor=\"#B45309\",\n"
+     << "      label=<<B><FONT POINT-SIZE=\"30\">TX Socket</FONT></B><BR/><FONT "
+        "POINT-SIZE=\"24\">Port 9000 (SIL Inbound)</FONT>>\n"
+     << "    ];\n";
+  os << "    RX [\n"
+     << "      fillcolor=\"#B45309\",\n"
+     << "      label=<<B><FONT POINT-SIZE=\"30\">RX Socket</FONT></B><BR/><FONT "
+        "POINT-SIZE=\"24\">Port 9001 (SIL Outbound)</FONT>>\n"
+     << "    ];\n\n";
+  os << "    TX -> RX [style=invis, weight=50, constraint=false];\n";
+  os << "  }\n\n";
 
+  // Tier 3: Test Harness
+  os << "  // --- Test Harness bounding box ---\n";
+  os << "  subgraph cluster_fixtures {\n";
+  os << "    label=<<B><FONT POINT-SIZE=\"40\">Test Harness</FONT></B>>;\n";
+  os << "    fontcolor=\"#F1F5F9\";\n";
+  os << "    style=\"rounded,filled\";\n";
+  os << "    color=\"#22C55E\";\n";
+  os << "    penwidth=6;\n";
+  os << "    fillcolor=\"#0B2A20\";\n";
+  os << "    margin=24;\n\n";
+
+  os << "    TestCase [\n"
+     << "      fillcolor=\"#047857\",\n"
+     << "      label=<<B><FONT POINT-SIZE=\"34\">Test Case / Fixtures</FONT></B>>\n"
+     << "    ];\n";
+  os << "  }\n\n";
+
+  // Collect edges
+  EdgeMap edge_map;
+  std::set<std::string> inbound_msg_names;
+  std::set<std::string> outbound_msg_names;
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-    (..., [](std::string& in_msgs, std::string& out_msgs, bool& f_in, bool& f_out) {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+    (..., [&]() {
+      constexpr auto e = EnumArrHolder<MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      emit_mermaid_edge_for_msg_id<Components, val>(in_msgs, out_msgs, f_in, f_out);
-    }(inbound_msgs, outbound_msgs, first_in, first_out));
+      collect_msg_edges<Components, val>(edge_map, inbound_msg_names, outbound_msg_names);
+    }());
   }(std::make_index_sequence<num_msgs>{});
 
-  std::cout << "    end\n\n";
+  // Bridging labels (aggregated, paired)
+  auto build_label = [](const std::set<std::string>& names) {
+    std::string out;
+    int count = 0;
+    for (auto const& n : names) {
+      if (count > 0) {
+        if (count % 2 == 0)
+          out += "\n";
+        else
+          out += ", ";
+      }
+      out += n;
+      count++;
+    }
+    return out;
+  };
 
-  std::cout << "    %% ─── INBOUND PATH ───\n";
-  std::cout << "    TestCase -->|send_msg| TX\n";
-  if (!inbound_msgs.empty()) {
-    std::cout << "    TX -->|\"" << inbound_msgs << "\"| UdpBridge\n\n";
+  std::string in_l = build_label(inbound_msg_names);
+  std::string out_l = build_label(outbound_msg_names);
+
+  // Flow: Test Harness -> Network -> Simulator
+  os << "  TestCase -> TX [label=\"send_msg\", color=\"#F1F5F9\", penwidth=5];\n";
+  os << "  TX -> " << ub_id << " [label=\"Inbound Traffic:\\n"
+     << dot_escape_label(in_l) << "\", color=\"#F1F5F9\", penwidth=5, fontsize=25];\n\n";
+
+  // Internal Simulator Logic
+  os << "  // Internal Simulator Logic\n";
+  for (auto const& [pair, names] : edge_map) {
+    os << "  " << pair.first << " -> " << pair.second << " [label=\""
+       << dot_escape_label(build_label(names)) << "\", style=dashed];\n";
   }
 
-  std::cout << "    %% ─── OUTBOUND PATH ───\n";
-  if (!outbound_msgs.empty()) {
-    std::cout << "    UdpBridge -->|\"" << outbound_msgs << "\"| RX\n";
-  }
-  std::cout << "    RX -->|recv_msg| TestCase\n";
+  os << "\n  // Flow: Simulator -> Network -> Test Harness\n";
+  os << "  RX -> " << ub_id << " [label=\"Outbound Traffic:\\n"
+     << dot_escape_label(out_l)
+     << "\", color=\"#F1F5F9\", penwidth=5, dir=back, fontsize=25, arrowtail=normal];\n";
+  os << "  TestCase -> RX [label=\"recv_msg\", color=\"#F1F5F9\", penwidth=5, dir=back, "
+        "arrowtail=normal];\n";
 
-  std::cout << "```\n\n";
+  os << "}\n";
+}
+
+template <typename Components>
+void write_graphviz_flow_dot_file(std::string_view path) {
+  std::ofstream out{std::string(path)};
+  if (!out) {
+    std::cerr << "generate_docs: failed to open DOT output: " << path << "\n";
+    return;
+  }
+  emit_graphviz_flow_dot<Components>(out);
+}
+
+template <typename Components>
+void emit_graphviz_flow_markdown(std::string_view dot_path) {
+  write_graphviz_flow_dot_file<Components>(dot_path);
+  // We no longer print the DOT source block into the Markdown to keep it clean.
 }

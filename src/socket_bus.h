@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "traits.h"  // brings in messages.hpp + MessageTraits<>
+#include "msg_base.h"
 
 namespace ipc {
 

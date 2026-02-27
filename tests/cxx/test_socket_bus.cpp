@@ -8,8 +8,10 @@
 #include <optional>
 #include <thread>
 
+#include "core_msgs.h"
+#include "msg_base.h"
+#include "simulation_msgs.h"
 #include "socket_bus.h"
-#include "traits.h"
 
 using namespace ipc;
 
@@ -31,7 +33,7 @@ static bool payload_matches(const RawMessage& msg,
 // ── Test: single MotorSequence round-trip ────────────────────────────────────
 
 TEST(SocketBus, MotorCmdRoundTrip) {
-  MotorSequencePayload sent{};
+  ::MotorSequencePayload sent{};
   sent.cmd_id = 1;
   sent.num_steps = 1;
   sent.steps[0] = {.speed_rpm = 1500, .duration_us = 500'000};
@@ -75,7 +77,7 @@ TEST(SocketBus, MultipleMsgsSequential) {
   {
     SocketBus client(kSockPath, /*create=*/false);
     for (int i = 0; i < kCount; ++i) {
-      KinematicsRequestPayload p{.reserved = static_cast<uint8_t>(i)};
+      ::KinematicsRequestPayload p{.reserved = static_cast<uint8_t>(i)};
       client.send<MsgId::KinematicsRequest>(p);
     }
   }

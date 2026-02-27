@@ -30,6 +30,7 @@ class UdpClient:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.bind(("", client_port))
         self._sock.settimeout(1.0)
+        self._queue = []  # Internal queue for messages not yet requested
 
     def register(self) -> None:
         """Send an empty packet so the bridge records our address."""
@@ -41,8 +42,23 @@ class UdpClient:
         self._sock.sendto(msg_id_bytes + payload_bytes, self._bridge)
         print(f"[UDP TX] {msg_id.name}: {payload}")
 
-    def recv_msg(self, expected_id: MsgId = None):
+    def recv_msg(self, expected_id: MsgId = None, verbose: bool = True):
         """Block until matching Message arrives (or timeout raises)."""
+        # 1. Check queue first
+        if expected_id is not None:
+            for i, (msg_enum, payload_obj) in enumerate(self._queue):
+                if msg_enum == expected_id:
+                    self._queue.pop(i)
+                    if verbose:
+                        print(f"[UDP RX/Q] {msg_enum.name}: {payload_obj}")
+                    return payload_obj
+        elif self._queue:
+            msg_enum, payload_obj = self._queue.pop(0)
+            if verbose:
+                print(f"[UDP RX/Q] {msg_enum.name}: {payload_obj}")
+            return payload_obj
+
+        # 2. Receive from network
         while True:
             data, _ = self._sock.recvfrom(4096)
             if len(data) < 2:
@@ -54,9 +70,6 @@ class UdpClient:
             except ValueError:
                 continue  # Unknown message
 
-            if expected_id is not None and msg_enum != expected_id:
-                continue
-
             # Ensure we have the correct amount of data for the payload
             expected_size = PAYLOAD_SIZE_BY_ID.get(msg_enum)
             if expected_size is None or len(data) - 2 != expected_size:
@@ -66,10 +79,30 @@ class UdpClient:
                 # We strip the 2-byte msgId header to unpack the payload
                 payload_class = MESSAGE_BY_ID[msg_enum]
                 payload_obj = payload_class.unpack_wire(data[2:])
-                print(f"[UDP RX] {msg_enum.name}: {payload_obj}")
+                
+                if expected_id is not None and msg_enum != expected_id:
+                    # Not what we wanted, queue it and keep looking
+                    self._queue.append((msg_enum, payload_obj))
+                    continue
+
+                if verbose:
+                    print(f"[UDP RX] {msg_enum.name}: {payload_obj}")
                 return payload_obj
             except struct.error:
                 continue
+
+    def drain(self) -> None:
+        """Discard all buffered UDP packets and clear internal queue."""
+        self._queue.clear()
+        old_timeout = self._sock.gettimeout()
+        self._sock.settimeout(0.0)
+        try:
+            while True:
+                self._sock.recvfrom(4096)
+        except (BlockingIOError, TimeoutError, socket.timeout):
+            pass
+        finally:
+            self._sock.settimeout(old_timeout)
 
     def close(self) -> None:
         self._sock.close()

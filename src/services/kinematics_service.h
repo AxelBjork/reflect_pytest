@@ -3,8 +3,9 @@
 
 #include "component.h"
 #include "component_logger.h"
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "simulation_msgs.h"
 
 namespace sil {
 
@@ -19,20 +20,20 @@ class DOC_DESC(
     "$$ v = \\text{RPM} \\times 0.01 \\text{ (m/s)} $$\n\n"
     "$$ x = \\int v \\, dt $$") KinematicsService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::KinematicsRequest,
-                                  ipc::MsgId::StateChange, ipc::MsgId::ResetRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::KinematicsData>;
+  using Subscribes = ipc::MsgList<MsgId::PhysicsTick, MsgId::KinematicsRequest, MsgId::MotorStatus>;
+  using Publishes = ipc::MsgList<MsgId::KinematicsData>;
 
   explicit KinematicsService(ipc::MessageBus& bus) : bus_(bus), logger_("kinematics") {
     ipc::bind_subscriptions(bus_, this);
   }
 
-  void on_message(const ipc::PhysicsTickPayload& tick) {
+  void on_message(const PhysicsTickPayload& tick) {
     std::lock_guard lk{mu_};
     float dt_s = tick.dt_us / 1e6f;
     speed_mps_ = tick.speed_rpm * K_RPM_TO_MPS;
     position_m_ += speed_mps_ * dt_s;
     elapsed_us_ += tick.dt_us;
+    cmd_id_ = tick.cmd_id;
 
     // Log every 100 ticks (approx 1s)
     static uint32_t count = 0;
@@ -41,27 +42,19 @@ class DOC_DESC(
     }
   }
 
-  void on_message(const ipc::StateChangePayload& sc) {
+  void on_message(const MotorStatusPayload& ms) {
     std::lock_guard lk{mu_};
-    cmd_id_ = sc.cmd_id;
-    if (sc.state == ipc::SystemState::Executing) {
+    if (ms.is_active && ms.cmd_id != cmd_id_) {
+      // New sequence detected
+      cmd_id_ = ms.cmd_id;
       elapsed_us_ = 0;
-    } else if (sc.state == ipc::SystemState::Ready) {
+    } else if (!ms.is_active) {
       speed_mps_ = 0.0f;
     }
   }
 
-  void on_message(const ipc::ResetRequestPayload&) {
-    std::lock_guard lk{mu_};
-    elapsed_us_ = 0;
-    position_m_ = 0.0f;
-    speed_mps_ = 0.0f;
-    cmd_id_ = 0;
-    logger_.info("Physics state reset");
-  }
-
-  void on_message(const ipc::KinematicsRequestPayload&) {
-    ipc::KinematicsPayload p{};
+  void on_message(const KinematicsRequestPayload&) {
+    KinematicsPayload p{};
     {
       std::lock_guard lk{mu_};
       p.cmd_id = cmd_id_;
@@ -69,7 +62,7 @@ class DOC_DESC(
       p.position_m = position_m_;
       p.speed_mps = speed_mps_;
     }
-    bus_.publish<ipc::MsgId::KinematicsData>(p);
+    bus_.publish<MsgId::KinematicsData>(p);
   }
 
  private:

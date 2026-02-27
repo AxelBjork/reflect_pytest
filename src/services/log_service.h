@@ -5,8 +5,9 @@
 #include <thread>
 
 #include "component.h"
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "msg_base.h"
 
 namespace sil {
 
@@ -16,7 +17,7 @@ class DOC_DESC(
     "to avoid blocking simulation services.") LogService {
  public:
   using Subscribes = ipc::MsgList<>;
-  using Publishes = ipc::MsgList<ipc::MsgId::Log>;
+  using Publishes = ipc::MsgList<MsgId::Log>;
 
   explicit LogService(ipc::MessageBus& bus);
   ~LogService();
@@ -25,7 +26,7 @@ class DOC_DESC(
   LogService& operator=(const LogService&) = delete;
 
   // Thread-safe async log entry point
-  void log(const ipc::LogPayload& p);
+  void log(const LogPayload& p);
 
  private:
   ipc::MessageBus& bus_;
@@ -33,7 +34,7 @@ class DOC_DESC(
   std::condition_variable cv_;
   std::thread worker_thread_;
   bool running_{true};
-  std::queue<ipc::LogPayload> queue_;
+  std::queue<::LogPayload> queue_;
 
   void worker_loop();
 };

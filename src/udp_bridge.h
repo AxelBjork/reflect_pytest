@@ -10,8 +10,11 @@
 #include <mutex>
 #include <thread>
 
+#include "autonomous_msgs.h"
 #include "component.h"
+#include "core_msgs.h"
 #include "message_bus.h"
+#include "simulation_msgs.h"
 
 namespace ipc {
 
@@ -25,10 +28,11 @@ class DOC_DESC(
     "onto the internal MessageBus.") UdpBridge {
  public:
   using Subscribes = MsgList<MsgId::Log, MsgId::StateData, MsgId::KinematicsData, MsgId::PowerData,
-                             MsgId::ThermalData, MsgId::EnvironmentData>;
+                             MsgId::ThermalData, MsgId::EnvironmentAck, MsgId::AutoDriveStatus,
+                             MsgId::EnvironmentRequest>;
   using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
-                            MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::EnvironmentCommand,
-                            MsgId::EnvironmentRequest, MsgId::ResetRequest>;
+                            MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::AutoDriveCommand,
+                            MsgId::EnvironmentData>;
 
   static constexpr uint16_t kDefaultPort = 9000;
 

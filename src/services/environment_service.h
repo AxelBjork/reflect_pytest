@@ -1,49 +1,40 @@
 #pragma once
+#include <chrono>
+#include <memory>
 #include <mutex>
+#include <vector>
 
+#include "autonomous_msgs.h"
 #include "component.h"
 #include "component_logger.h"
 #include "message_bus.h"
-#include "messages.h"
 
 namespace sil {
 
-class DOC_DESC("Environment Service") EnvironmentService {
+class DOC_DESC(
+    "Centralized service for managing environmental simulation data.\n\n"
+    "It maintains a spatial cache of environmental regions (temperature, incline, friction) "
+    "and provides efficient, lifetime-tracked access to this data via in-process bus messages. "
+    "By publishing InternalEnvData messages containing std::shared_ptr, it allows consumers "
+    "like AutonomousService to access stable map regions without data copying or direct component "
+    "coupling.") EnvironmentService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::EnvironmentCommand, ipc::MsgId::EnvironmentRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::EnvironmentData>;
+  using Subscribes = ipc::MsgList<MsgId::EnvironmentData, MsgId::InternalEnvRequest>;
+  using Publishes =
+      ipc::MsgList<MsgId::EnvironmentAck, MsgId::EnvironmentRequest, MsgId::InternalEnvData>;
 
-  explicit EnvironmentService(ipc::MessageBus& bus) : bus_(bus), logger_("env") {
-    ipc::bind_subscriptions(bus_, this);
-  }
+  explicit EnvironmentService(ipc::MessageBus& bus);
 
-  void on_message(const ipc::EnvironmentCommandPayload& cmd) {
-    std::lock_guard lk{mu_};
-    env_.ambient_temp_c = cmd.ambient_temp_c;
-    env_.incline_percent = cmd.incline_percent;
-    env_.surface_friction = cmd.surface_friction;
-
-    // Broadcast newly applied environment conditions
-    bus_.publish<ipc::MsgId::EnvironmentData>(env_);
-    logger_.info("Environment updated: Temp %.1fC, Incline %.1f%%, Friction %.2f",
-                 env_.ambient_temp_c, env_.incline_percent, env_.surface_friction);
-  }
-
-  void on_message(const ipc::EnvironmentRequestPayload&) {
-    ipc::EnvironmentPayload p;
-    {
-      std::lock_guard lk{mu_};
-      p = env_;
-    }
-    bus_.publish<ipc::MsgId::EnvironmentData>(p);
-  }
+  void on_message(const EnvironmentPayload& env);
+  void on_message(const InternalEnvRequestPayload& req);
 
  private:
   ipc::MessageBus& bus_;
   ComponentLogger logger_;
-  std::mutex mu_;
+  std::recursive_mutex mu_;
 
-  ipc::EnvironmentPayload env_{20.0f, 0.0f, 1.0f};  // Defaults
+  std::vector<std::shared_ptr<::EnvironmentPayload>> cache_;
+  std::chrono::steady_clock::time_point last_request_time_{};
 };
 
 }  // namespace sil
