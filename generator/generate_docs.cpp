@@ -37,12 +37,13 @@ void emit_components() {
 }
 
 int main(int argc, char** argv) {
-  namespace fs = std::filesystem;
-  fs::path out_dir = ".";
-  if (argc > 1) {
-    out_dir = argv[1];
+  if (argc < 2) {
+    std::cerr << "Usage: generate_docs <output_dir>\n";
+    return 1;
   }
-  fs::path dot_path = out_dir / "ipc_flow.dot";
+
+  std::string output_dir = argv[1];
+  std::string dot_path = output_dir + "/ipc_flow.dot";
 
   // ── Front-matter & module overview ─────────────────────────────────────────
 
@@ -95,7 +96,7 @@ This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module 
 
   // Emits the DOT file (for tooling) and also prints the DOT source into the Markdown.
   // Typical render: dot -Tsvg <dot_path> -o <svg_path>
-  emit_graphviz_flow_markdown<AllComponents>(dot_path.string());
+  emit_graphviz_flow_markdown<AllComponents>(dot_path);
 
   // ── Services & Components ───────────────────────────────────────────────────
   std::cout << "---\n\n## Component Services\n\n";

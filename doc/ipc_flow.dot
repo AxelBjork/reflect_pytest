@@ -1,10 +1,10 @@
 digraph IPC {
   rankdir=LR;
   bgcolor="#0F172A";
-  pad=0.22;
-  nodesep=0.62;
-  ranksep=0.70;
-  splines=spline;
+  pad=0.35;
+  nodesep=5.95;
+  ranksep=0.95;
+  splines=polyline;
   remincross=true;
 
   fontname="Helvetica,Arial,sans-serif";
@@ -78,11 +78,12 @@ digraph IPC {
       fillcolor="#0369A1",
       label=<<B><FONT POINT-SIZE="30">LogService</FONT></B><BR/><FONT POINT-SIZE="24">Asynchronous logging sink.</FONT>>
     ];
-    UdpBridge [
-      fillcolor="#0F766E",
-      label=<<B><FONT POINT-SIZE="38">UdpBridge</FONT></B><BR/><FONT POINT-SIZE="26">Message Distribution Hub</FONT>>
-    ];
   }
+
+  UdpBridge [
+    fillcolor="#0F766E",
+    label=<<B><FONT POINT-SIZE="38">UdpBridge</FONT></B><BR/><FONT POINT-SIZE="26">Message Distribution Hub</FONT>>
+  ];
 
   // --- Network Layer bounding box (TX/RX) ---
   subgraph cluster_sockets {
@@ -124,36 +125,250 @@ digraph IPC {
     ];
   }
 
-  TestCase -> TX [label="send_msg", color="#F1F5F9", penwidth=5];
-  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nKinematicsData, KinematicsRequest\nMotorSequence, PowerData\nPowerRequest, ResetRequest\nStateRequest, ThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
+  // --- IPC Messages ---
+  subgraph cluster_msgs {
+    label=<<B><FONT POINT-SIZE="40">Messages</FONT></B>>;
+    fontcolor="#F1F5F9";
+    style="rounded,filled";
+    color="#8B5CF6";
+    penwidth=6;
+    fillcolor="#1F1636";
+    margin=24;
 
-  // Internal Simulator Logic
-  AutonomousService -> EnvironmentService [label="InternalEnvRequest", style=dashed];
-  AutonomousService -> UdpBridge [label="AutoDriveStatus, KinematicsRequest\nMotorSequence, PowerRequest", style=dashed];
-  EnvironmentService -> AutonomousService [label="InternalEnvData", style=dashed];
-  EnvironmentService -> UdpBridge [label="EnvironmentAck, EnvironmentRequest", style=dashed];
-  KinematicsService -> UdpBridge [label="KinematicsData", style=dashed];
-  LogService -> UdpBridge [label="Log", style=dashed];
-  MotorService -> KinematicsService [label="MotorStatus", style=dashed];
-  MotorService -> PowerService [label="MotorStatus", style=dashed];
-  MotorService -> StateService [label="MotorStatus", style=dashed];
-  PowerService -> UdpBridge [label="PowerData", style=dashed];
-  StateService -> AutonomousService [label="PhysicsTick", style=dashed];
-  StateService -> KinematicsService [label="PhysicsTick", style=dashed];
-  StateService -> MotorService [label="PhysicsTick", style=dashed];
-  StateService -> PowerService [label="PhysicsTick", style=dashed];
-  StateService -> ThermalService [label="PhysicsTick", style=dashed];
-  StateService -> UdpBridge [label="StateData", style=dashed];
-  ThermalService -> UdpBridge [label="ThermalData", style=dashed];
-  UdpBridge -> AutonomousService [label="AutoDriveCommand, KinematicsData\nPowerData, ResetRequest", style=dashed];
-  UdpBridge -> EnvironmentService [label="EnvironmentData, ResetRequest", style=dashed];
-  UdpBridge -> KinematicsService [label="KinematicsRequest, ResetRequest", style=dashed];
-  UdpBridge -> MotorService [label="MotorSequence, ResetRequest", style=dashed];
-  UdpBridge -> PowerService [label="PowerRequest, ResetRequest", style=dashed];
-  UdpBridge -> StateService [label="StateRequest", style=dashed];
-  UdpBridge -> ThermalService [label="EnvironmentData, ResetRequest\nThermalRequest", style=dashed];
+    node [
+      shape=oval,
+      style="filled",
+      fontname="Helvetica,Arial,sans-serif",
+      fontsize=20,
+      fontcolor="#FFFFFF",
+      penwidth=3,
+      color="#E2E8F0",
+      margin="0.12,0.08"
+    ];
+
+    subgraph cluster_msgs_AutonomousService {
+      label=<<B><FONT POINT-SIZE="22">AutonomousService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_MotorSequence [
+        fillcolor="#A855F7",
+        label=<<B><FONT POINT-SIZE="24">MotorSequence</FONT></B><BR/><FONT POINT-SIZE="16">Bidirectional</FONT>>
+      ];
+      msg_KinematicsRequest [
+        fillcolor="#A855F7",
+        label=<<B><FONT POINT-SIZE="24">KinematicsRequest</FONT></B><BR/><FONT POINT-SIZE="16">Bidirectional</FONT>>
+      ];
+      msg_PowerRequest [
+        fillcolor="#A855F7",
+        label=<<B><FONT POINT-SIZE="24">PowerRequest</FONT></B><BR/><FONT POINT-SIZE="16">Bidirectional</FONT>>
+      ];
+      msg_AutoDriveCommand [
+        fillcolor="#2563EB",
+        label=<<B><FONT POINT-SIZE="24">AutoDriveCommand</FONT></B><BR/><FONT POINT-SIZE="16">Inbound</FONT>>
+      ];
+      msg_AutoDriveStatus [
+        fillcolor="#F97316",
+        label=<<B><FONT POINT-SIZE="24">AutoDriveStatus</FONT></B><BR/><FONT POINT-SIZE="16">Outbound</FONT>>
+      ];
+      msg_ResetRequest [
+        fillcolor="#2563EB",
+        label=<<B><FONT POINT-SIZE="24">ResetRequest</FONT></B><BR/><FONT POINT-SIZE="16">Inbound</FONT>>
+      ];
+      msg_InternalEnvRequest [
+        fillcolor="#64748B",
+        label=<<B><FONT POINT-SIZE="24">InternalEnvRequest</FONT></B><BR/><FONT POINT-SIZE="16">Internal</FONT>>
+      ];
+    }
+
+    subgraph cluster_msgs_EnvironmentService {
+      label=<<B><FONT POINT-SIZE="22">EnvironmentService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_EnvironmentAck [
+        fillcolor="#F97316",
+        label=<<B><FONT POINT-SIZE="24">EnvironmentAck</FONT></B><BR/><FONT POINT-SIZE="16">Outbound</FONT>>
+      ];
+      msg_EnvironmentRequest [
+        fillcolor="#F97316",
+        label=<<B><FONT POINT-SIZE="24">EnvironmentRequest</FONT></B><BR/><FONT POINT-SIZE="16">Outbound</FONT>>
+      ];
+      msg_EnvironmentData [
+        fillcolor="#2563EB",
+        label=<<B><FONT POINT-SIZE="24">EnvironmentData</FONT></B><BR/><FONT POINT-SIZE="16">Inbound</FONT>>
+      ];
+      msg_InternalEnvData [
+        fillcolor="#64748B",
+        label=<<B><FONT POINT-SIZE="24">InternalEnvData</FONT></B><BR/><FONT POINT-SIZE="16">Internal</FONT>>
+      ];
+    }
+
+    subgraph cluster_msgs_KinematicsService {
+      label=<<B><FONT POINT-SIZE="22">KinematicsService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_KinematicsData [
+        fillcolor="#A855F7",
+        label=<<B><FONT POINT-SIZE="24">KinematicsData</FONT></B><BR/><FONT POINT-SIZE="16">Bidirectional</FONT>>
+      ];
+    }
+
+    subgraph cluster_msgs_LogService {
+      label=<<B><FONT POINT-SIZE="22">LogService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_Log [
+        fillcolor="#F97316",
+        label=<<B><FONT POINT-SIZE="24">Log</FONT></B><BR/><FONT POINT-SIZE="16">Outbound</FONT>>
+      ];
+    }
+
+    subgraph cluster_msgs_MotorService {
+      label=<<B><FONT POINT-SIZE="22">MotorService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_MotorStatus [
+        fillcolor="#64748B",
+        label=<<B><FONT POINT-SIZE="24">MotorStatus</FONT></B><BR/><FONT POINT-SIZE="16">Internal</FONT>>
+      ];
+    }
+
+    subgraph cluster_msgs_PowerService {
+      label=<<B><FONT POINT-SIZE="22">PowerService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_PowerData [
+        fillcolor="#A855F7",
+        label=<<B><FONT POINT-SIZE="24">PowerData</FONT></B><BR/><FONT POINT-SIZE="16">Bidirectional</FONT>>
+      ];
+    }
+
+    subgraph cluster_msgs_StateService {
+      label=<<B><FONT POINT-SIZE="22">StateService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_StateRequest [
+        fillcolor="#2563EB",
+        label=<<B><FONT POINT-SIZE="24">StateRequest</FONT></B><BR/><FONT POINT-SIZE="16">Inbound</FONT>>
+      ];
+      msg_StateData [
+        fillcolor="#F97316",
+        label=<<B><FONT POINT-SIZE="24">StateData</FONT></B><BR/><FONT POINT-SIZE="16">Outbound</FONT>>
+      ];
+      msg_PhysicsTick [
+        fillcolor="#64748B",
+        label=<<B><FONT POINT-SIZE="24">PhysicsTick</FONT></B><BR/><FONT POINT-SIZE="16">Internal</FONT>>
+      ];
+    }
+
+    subgraph cluster_msgs_ThermalService {
+      label=<<B><FONT POINT-SIZE="22">ThermalService</FONT></B>>;
+      style="rounded";
+      color="#334155";
+      penwidth=2;
+      msg_ThermalRequest [
+        fillcolor="#2563EB",
+        label=<<B><FONT POINT-SIZE="24">ThermalRequest</FONT></B><BR/><FONT POINT-SIZE="16">Inbound</FONT>>
+      ];
+      msg_ThermalData [
+        fillcolor="#F97316",
+        label=<<B><FONT POINT-SIZE="24">ThermalData</FONT></B><BR/><FONT POINT-SIZE="16">Outbound</FONT>>
+      ];
+    }
+
+  }
+
+  // Affinity edges (invisible)
+  LogService -> msg_Log [style=invis, weight=60, constraint=false];
+  StateService -> msg_StateRequest [style=invis, weight=60, constraint=false];
+  StateService -> msg_StateData [style=invis, weight=60, constraint=false];
+  AutonomousService -> msg_MotorSequence [style=invis, weight=60, constraint=false];
+  AutonomousService -> msg_KinematicsRequest [style=invis, weight=60, constraint=false];
+  KinematicsService -> msg_KinematicsData [style=invis, weight=60, constraint=false];
+  AutonomousService -> msg_PowerRequest [style=invis, weight=60, constraint=false];
+  PowerService -> msg_PowerData [style=invis, weight=60, constraint=false];
+  ThermalService -> msg_ThermalRequest [style=invis, weight=60, constraint=false];
+  ThermalService -> msg_ThermalData [style=invis, weight=60, constraint=false];
+  EnvironmentService -> msg_EnvironmentAck [style=invis, weight=60, constraint=false];
+  EnvironmentService -> msg_EnvironmentRequest [style=invis, weight=60, constraint=false];
+  EnvironmentService -> msg_EnvironmentData [style=invis, weight=60, constraint=false];
+  AutonomousService -> msg_AutoDriveCommand [style=invis, weight=60, constraint=false];
+  AutonomousService -> msg_AutoDriveStatus [style=invis, weight=60, constraint=false];
+  MotorService -> msg_MotorStatus [style=invis, weight=60, constraint=false];
+  StateService -> msg_PhysicsTick [style=invis, weight=60, constraint=false];
+  AutonomousService -> msg_ResetRequest [style=invis, weight=60, constraint=false];
+  AutonomousService -> msg_InternalEnvRequest [style=invis, weight=60, constraint=false];
+  EnvironmentService -> msg_InternalEnvData [style=invis, weight=60, constraint=false];
+
+  TestCase -> TX [label="send_msg", color="#F1F5F9", penwidth=5];
+  TX -> UdpBridge [label="udp/9000", color="#F1F5F9", penwidth=5, fontsize=25];
+
+  // Message Flow (publish -> MsgId -> subscribe)
+  AutonomousService -> msg_AutoDriveStatus [style=dashed];
+  AutonomousService -> msg_InternalEnvRequest [style=dashed];
+  AutonomousService -> msg_KinematicsRequest [style=dashed];
+  AutonomousService -> msg_MotorSequence [style=dashed];
+  AutonomousService -> msg_PowerRequest [style=dashed];
+  EnvironmentService -> msg_EnvironmentAck [style=dashed];
+  EnvironmentService -> msg_EnvironmentRequest [style=dashed];
+  EnvironmentService -> msg_InternalEnvData [style=dashed];
+  KinematicsService -> msg_KinematicsData [style=dashed];
+  LogService -> msg_Log [style=dashed];
+  MotorService -> msg_MotorStatus [style=dashed];
+  PowerService -> msg_PowerData [style=dashed];
+  StateService -> msg_PhysicsTick [style=dashed];
+  StateService -> msg_StateData [style=dashed];
+  ThermalService -> msg_ThermalData [style=dashed];
+  UdpBridge -> msg_AutoDriveCommand [style=dashed];
+  UdpBridge -> msg_EnvironmentData [style=dashed];
+  UdpBridge -> msg_KinematicsRequest [style=dashed];
+  UdpBridge -> msg_MotorSequence [style=dashed];
+  UdpBridge -> msg_PowerRequest [style=dashed];
+  UdpBridge -> msg_ResetRequest [style=dashed];
+  UdpBridge -> msg_StateRequest [style=dashed];
+  UdpBridge -> msg_ThermalRequest [style=dashed];
+  msg_AutoDriveCommand -> AutonomousService [style=dashed];
+  msg_AutoDriveStatus -> UdpBridge [style=dashed];
+  msg_EnvironmentAck -> UdpBridge [style=dashed];
+  msg_EnvironmentData -> EnvironmentService [style=dashed];
+  msg_EnvironmentData -> ThermalService [style=dashed];
+  msg_EnvironmentRequest -> UdpBridge [style=dashed];
+  msg_InternalEnvData -> AutonomousService [style=dashed];
+  msg_InternalEnvRequest -> EnvironmentService [style=dashed];
+  msg_KinematicsData -> AutonomousService [style=dashed];
+  msg_KinematicsData -> UdpBridge [style=dashed];
+  msg_KinematicsRequest -> KinematicsService [style=dashed];
+  msg_Log -> UdpBridge [style=dashed];
+  msg_MotorSequence -> MotorService [style=dashed];
+  msg_MotorStatus -> KinematicsService [style=dashed];
+  msg_MotorStatus -> PowerService [style=dashed];
+  msg_MotorStatus -> StateService [style=dashed];
+  msg_PhysicsTick -> AutonomousService [style=dashed];
+  msg_PhysicsTick -> KinematicsService [style=dashed];
+  msg_PhysicsTick -> MotorService [style=dashed];
+  msg_PhysicsTick -> PowerService [style=dashed];
+  msg_PhysicsTick -> ThermalService [style=dashed];
+  msg_PowerData -> AutonomousService [style=dashed];
+  msg_PowerData -> UdpBridge [style=dashed];
+  msg_PowerRequest -> PowerService [style=dashed];
+  msg_ResetRequest -> AutonomousService [style=dashed];
+  msg_ResetRequest -> EnvironmentService [style=dashed];
+  msg_ResetRequest -> KinematicsService [style=dashed];
+  msg_ResetRequest -> MotorService [style=dashed];
+  msg_ResetRequest -> PowerService [style=dashed];
+  msg_ResetRequest -> ThermalService [style=dashed];
+  msg_StateData -> UdpBridge [style=dashed];
+  msg_StateRequest -> StateService [style=dashed];
+  msg_ThermalData -> UdpBridge [style=dashed];
+  msg_ThermalRequest -> ThermalService [style=dashed];
 
   // Flow: Simulator -> Network -> Test Harness
-  RX -> UdpBridge [label="Outbound Traffic:\nAutoDriveStatus, EnvironmentAck\nEnvironmentRequest, KinematicsData\nKinematicsRequest, Log\nMotorSequence, PowerData\nPowerRequest, StateData\nThermalData", color="#F1F5F9", penwidth=5, dir=back, fontsize=25, arrowtail=normal];
+  RX -> UdpBridge [label="udp/9001", color="#F1F5F9", penwidth=5, dir=back, fontsize=25, arrowtail=normal];
   TestCase -> RX [label="recv_msg", color="#F1F5F9", penwidth=5, dir=back, arrowtail=normal];
 }

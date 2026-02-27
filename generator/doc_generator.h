@@ -436,6 +436,8 @@ void emit_md_payload_section_for_msg_id() {
 }
 
 #include <map>
+#include <utility>
+#include <vector>
 
 // -------------------------------------------------------------------------------------------------
 // Graphviz DOT message-flow diagram
@@ -546,78 +548,60 @@ inline std::string wrap_words(std::string_view s, std::size_t width = 45) {
   return out;
 }
 
-// Edge aggregation: maps (src_id, dst_id) -> set of message names.
-using EdgeMap = std::map<std::pair<std::string, std::string>, std::set<std::string>>;
+// Make MsgId labels narrower by breaking at '_' and wrapping.
+inline std::string msg_label_text(std::string_view s, std::size_t width = 18) {
+  std::string t{s};
+  for (char& c : t)
+    if (c == '_') c = ' ';
+  return wrap_words(t, width);
+}
+
+// Per-message flow: create a node per MsgId and connect publishers -> MsgId -> subscribers.
+struct MsgNodeInfo {
+  std::string id;         // DOT node id (sanitized)
+  std::string name;       // MsgId enumerator identifier (human label)
+  std::string direction;  // "Inbound" | "Outbound" | "Bidirectional" | "Internal"
+  std::string fillcolor;  // node color by direction
+  std::string anchor_id;  // primary service to "own" this message for clustering
+};
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void collect_inbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
-                                std::string_view mname) {
-  const std::string ub = dot_id("UdpBridge");
+void collect_publishers_for_msg_impl(std::set<std::string>& pubs, std::index_sequence<Is...>) {
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_subscribes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
-      edges[{ub, dot_id(cpp_type_name_str<Comp>())}].insert(std::string(mname));
+    if constexpr (component_publishes<Comp, Id>()) {
+      pubs.insert(dot_id(cpp_type_name_str<Comp>()));
     }
   }());
 }
 
 template <typename Tuple, ipc::MsgId Id>
-void collect_inbound_edges(EdgeMap& edges, std::string_view mname) {
-  collect_inbound_edges_impl<Tuple, Id>(edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{},
-                                        mname);
+void collect_publishers_for_msg(std::set<std::string>& pubs) {
+  collect_publishers_for_msg_impl<Tuple, Id>(pubs,
+                                             std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
 template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void collect_outbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
-                                 std::string_view mname) {
-  const std::string ub = dot_id("UdpBridge");
+void collect_subscribers_for_msg_impl(std::set<std::string>& subs, std::index_sequence<Is...>) {
   (..., [&]() {
     using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_publishes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
-      edges[{dot_id(cpp_type_name_str<Comp>()), ub}].insert(std::string(mname));
+    if constexpr (component_subscribes<Comp, Id>()) {
+      subs.insert(dot_id(cpp_type_name_str<Comp>()));
     }
   }());
 }
 
 template <typename Tuple, ipc::MsgId Id>
-void collect_outbound_edges(EdgeMap& edges, std::string_view mname) {
-  collect_outbound_edges_impl<Tuple, Id>(
-      edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{}, mname);
+void collect_subscribers_for_msg(std::set<std::string>& subs) {
+  collect_subscribers_for_msg_impl<Tuple, Id>(subs,
+                                              std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void collect_internal_edges_impl(EdgeMap& edges, std::index_sequence<Is...>, std::string_view mname,
-                                 std::string_view pub_name) {
-  (..., [&]() {
-    using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_subscribes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
-      edges[{dot_id(pub_name), dot_id(cpp_type_name_str<Comp>())}].insert(std::string(mname));
-    }
-  }());
-}
-
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
-void collect_internal_edges_pub_impl(EdgeMap& edges, std::index_sequence<Is...>,
-                                     std::string_view mname) {
-  (..., [&]() {
-    using Comp = std::tuple_element_t<Is, Tuple>;
-    if constexpr (component_publishes<Comp, Id>() && !std::is_same_v<Comp, ipc::UdpBridge>) {
-      collect_internal_edges_impl<Tuple, Id>(edges,
-                                             std::make_index_sequence<std::tuple_size_v<Tuple>>{},
-                                             mname, cpp_type_name_str<Comp>());
-    }
-  }());
-}
-
-template <typename Tuple, ipc::MsgId Id>
-void collect_internal_edges(EdgeMap& edges, std::string_view mname) {
-  collect_internal_edges_pub_impl<Tuple, Id>(
-      edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{}, mname);
-}
+using MsgEdge = std::pair<std::string, std::string>;
+using MsgEdgeSet = std::set<MsgEdge>;
 
 template <typename Components, uint32_t Id>
-void collect_msg_edges(EdgeMap& edges, std::set<std::string>& inbound_msg_names,
-                       std::set<std::string>& outbound_msg_names) {
+void collect_msg_nodes_and_edges(std::vector<MsgNodeInfo>& nodes, MsgEdgeSet& edges) {
   using T = typename doc_payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
     constexpr auto mid = static_cast<ipc::MsgId>(Id);
@@ -627,20 +611,58 @@ void collect_msg_edges(EdgeMap& edges, std::set<std::string>& inbound_msg_names,
     constexpr bool py_sub = py_subscribes<Components, mid>();
     constexpr bool py_pub = py_publishes<Components, mid>();
 
-    if (py_pub && cxx_sub && !cxx_pub && !py_sub) {
-      inbound_msg_names.insert(std::string(mname));
-      collect_inbound_edges<Components, mid>(edges, mname);
-    } else if (cxx_pub && py_sub && !py_pub && !cxx_sub) {
-      outbound_msg_names.insert(std::string(mname));
-      collect_outbound_edges<Components, mid>(edges, mname);
+    const std::string ub = dot_id("UdpBridge");
+
+    // Determine direction (for styling only).
+    std::string direction = "Internal";
+    std::string fillcolor = "#64748B";
+    if (py_pub && cxx_sub && !py_sub && !cxx_pub) {
+      direction = "Inbound";
+      fillcolor = "#2563EB";
+    } else if (cxx_pub && py_sub && !cxx_sub && !py_pub) {
+      direction = "Outbound";
+      fillcolor = "#F97316";
     } else if ((py_pub || py_sub) && (cxx_pub || cxx_sub)) {
-      inbound_msg_names.insert(std::string(mname));
-      collect_inbound_edges<Components, mid>(edges, mname);
-      outbound_msg_names.insert(std::string(mname));
-      collect_outbound_edges<Components, mid>(edges, mname);
-    } else if (!py_pub && !py_sub && cxx_pub && cxx_sub) {
-      collect_internal_edges<Components, mid>(edges, mname);
+      direction = "Bidirectional";
+      fillcolor = "#A855F7";
     }
+
+    // Gather publishers/subscribers (includes UdpBridge when applicable).
+    std::set<std::string> pubs;
+    std::set<std::string> subs;
+    collect_publishers_for_msg<Components, mid>(pubs);
+    collect_subscribers_for_msg<Components, mid>(subs);
+
+    if (pubs.empty() && subs.empty()) return;
+
+    // Pick an "anchor" service so messages cluster near the service that primarily owns them.
+    // Heuristic:
+    //  - Inbound (UdpBridge -> internal): anchor first internal subscriber
+    //  - Outbound (internal -> UdpBridge): anchor first internal publisher
+    //  - Internal: anchor first internal publisher (else first internal subscriber)
+    //  - Bidirectional: prefer internal publisher else internal subscriber
+    std::set<std::string> internal_pubs = pubs;
+    std::set<std::string> internal_subs = subs;
+    internal_pubs.erase(ub);
+    internal_subs.erase(ub);
+
+    std::string anchor;
+    if (py_pub && cxx_sub && !py_sub && !cxx_pub) {
+      if (!internal_subs.empty()) anchor = *internal_subs.begin();
+    } else if (cxx_pub && py_sub && !cxx_sub && !py_pub) {
+      if (!internal_pubs.empty()) anchor = *internal_pubs.begin();
+    } else {
+      if (!internal_pubs.empty())
+        anchor = *internal_pubs.begin();
+      else if (!internal_subs.empty())
+        anchor = *internal_subs.begin();
+    }
+
+    std::string msg_id = dot_id(std::string("msg_") + std::string(mname));
+    nodes.push_back(MsgNodeInfo{msg_id, std::string(mname), direction, fillcolor, anchor});
+
+    for (auto const& p : pubs) edges.insert({p, msg_id});
+    for (auto const& s : subs) edges.insert({msg_id, s});
   }
 }
 
@@ -651,11 +673,12 @@ void emit_graphviz_flow_dot(std::ostream& os) {
   os << "digraph IPC {\n";
   os << "  rankdir=LR;\n";
   os << "  bgcolor=\"#0F172A\";\n";
-  os << "  pad=0.22;\n";
-  os << "  nodesep=0.62;\n";
-  os << "  ranksep=0.70;\n";
-  os << "  splines=spline;\n";
+  os << "  pad=0.35;\n";
+  os << "  nodesep=0.95;\n";
+  os << "  ranksep=0.95;\n";
+  os << "  splines=polyline;\n";
   os << "  remincross=true;\n\n";
+  os << "  compound=true;\n";
 
   os << "  fontname=\"Helvetica,Arial,sans-serif\";\n";
   os << "  fontsize=52;\n";
@@ -706,13 +729,7 @@ void emit_graphviz_flow_dot(std::ostream& os) {
       constexpr auto R = ^^Comp;
       const std::string cname = cpp_type_name_str<Comp>();
 
-      if constexpr (std::is_same_v<Comp, ipc::UdpBridge>) {
-        os << "    " << ub_id << " [\n"
-           << "      fillcolor=\"#0F766E\",\n"
-           << "      label=<<B><FONT POINT-SIZE=\"38\">" << html_escape(cname)
-           << "</FONT></B><BR/><FONT POINT-SIZE=\"26\">Message Distribution Hub</FONT>>\n"
-           << "    ];\n";
-      } else {
+      if constexpr (!std::is_same_v<Comp, ipc::UdpBridge>) {
         std::string desc_text = wrap_words(first_sentence(get_desc<R>().text), 40);
         if (desc_text.empty()) desc_text = cname;
         os << "    " << dot_id(cname) << " [\n"
@@ -724,6 +741,13 @@ void emit_graphviz_flow_dot(std::ostream& os) {
     }());
   }(std::make_index_sequence<std::tuple_size_v<Components>>{});
   os << "  }\n\n";
+
+  // UdpBridge (positioned to the right of the services)
+  os << "  " << ub_id << " [\n"
+     << "    fillcolor=\"#0F766E\",\n"
+     << "    label=<<B><FONT POINT-SIZE=\"38\">UdpBridge</FONT></B><BR/><FONT "
+        "POINT-SIZE=\"26\">Message Distribution Hub</FONT>>\n"
+     << "  ];\n\n";
 
   // Tier 2: Network Layer
   os << "  // --- Network Layer bounding box (TX/RX) ---\n";
@@ -767,54 +791,118 @@ void emit_graphviz_flow_dot(std::ostream& os) {
      << "    ];\n";
   os << "  }\n\n";
 
-  // Collect edges
-  EdgeMap edge_map;
-  std::set<std::string> inbound_msg_names;
-  std::set<std::string> outbound_msg_names;
+  // Collect per-message nodes + edges (publish -> MsgId -> subscribe).
+  std::vector<MsgNodeInfo> msg_nodes;
+  MsgEdgeSet msg_edges;
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [&]() {
       constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
-      collect_msg_edges<Components, val>(edge_map, inbound_msg_names, outbound_msg_names);
+      collect_msg_nodes_and_edges<Components, val>(msg_nodes, msg_edges);
     }());
   }(std::make_index_sequence<num_msgs>{});
 
-  // Bridging labels (aggregated, paired)
-  auto build_label = [](const std::set<std::string>& names) {
-    std::string out;
-    int count = 0;
-    for (auto const& n : names) {
-      if (count > 0) {
-        if (count % 2 == 0)
-          out += "\n";
-        else
-          out += ", ";
-      }
-      out += n;
-      count++;
-    }
-    return out;
-  };
+  // Group messages by anchor service for clustering.
+  std::map<std::string, std::vector<const MsgNodeInfo*>> msgs_by_anchor;
+  std::vector<const MsgNodeInfo*> msgs_misc;
+  for (auto const& n : msg_nodes) {
+    if (!n.anchor_id.empty())
+      msgs_by_anchor[n.anchor_id].push_back(&n);
+    else
+      msgs_misc.push_back(&n);
+  }
 
-  std::string in_l = build_label(inbound_msg_names);
-  std::string out_l = build_label(outbound_msg_names);
+  // Tier 2.5: Message Types (one node per MsgId), clustered by owning service.
+  os << "  // --- IPC Messages ---\n";
+  os << "  subgraph cluster_msgs {\n";
+  os << "    label=<<B><FONT POINT-SIZE=\"40\">Messages</FONT></B>>;\n";
+  os << "    fontcolor=\"#F1F5F9\";\n";
+  os << "    style=\"rounded,filled\";\n";
+  os << "    color=\"#8B5CF6\";\n";
+  os << "    penwidth=6;\n";
+  os << "    fillcolor=\"#1F1636\";\n";
+  os << "    margin=24;\n\n";
+
+  os << "    node [\n"
+     << "      shape=oval,\n"
+     << "      style=\"filled\",\n"
+     << "      fontname=\"Helvetica,Arial,sans-serif\",\n"
+     << "      fontsize=20,\n"
+     << "      fontcolor=\"#FFFFFF\",\n"
+     << "      penwidth=3,\n"
+     << "      color=\"#E2E8F0\",\n"
+     << "      margin=\"0.12,0.08\"\n"
+     << "    ];\n\n";
+
+  // One sub-cluster per anchor service (messages "owned" by that service).
+  // This restores a more natural hierarchy and keeps related MsgIds near the service.
+  for (auto const& [anchor, vec] : msgs_by_anchor) {
+    if (vec.empty()) continue;
+    os << "    subgraph cluster_msgs_" << anchor << " {\n"
+       << "      label=<<B><FONT POINT-SIZE=\"22\">" << html_escape(anchor) << "</FONT></B>>;\n"
+       << "      style=\"rounded\";\n"
+       << "      color=\"#334155\";\n"
+       << "      penwidth=2;\n";
+    for (auto const* n : vec) {
+      if (!n) {
+        continue;
+      }
+      os << "      " << n->id << " [\n"
+         << "        fillcolor=\"" << n->fillcolor << "\",\n"
+         << "        label=<<B><FONT POINT-SIZE=\"24\">" << html_escape(msg_label_text(n->name))
+         << "</FONT></B><BR/><FONT POINT-SIZE=\"16\">" << html_escape(n->direction) << "</FONT>>\n"
+         << "      ];\n";
+    }
+    os << "    }\n\n";
+  }
+
+  // Any remaining messages without an anchor.
+  if (!msgs_misc.empty()) {
+    os << "    subgraph cluster_msgs_misc {\n"
+       << "      label=<<B><FONT POINT-SIZE=\"22\">Misc</FONT></B>>;\n"
+       << "      style=\"rounded\";\n"
+       << "      color=\"#334155\";\n"
+       << "      penwidth=2;\n";
+    for (auto const* n : msgs_misc) {
+      if (!n) {
+        continue;
+      }
+      os << "      " << n->id << " [\n"
+         << "        fillcolor=\"" << n->fillcolor << "\",\n"
+         << "        label=<<B><FONT POINT-SIZE=\"24\">" << html_escape(msg_label_text(n->name))
+         << "</FONT></B><BR/><FONT POINT-SIZE=\"16\">" << html_escape(n->direction) << "</FONT>>\n"
+         << "      ];\n";
+    }
+    os << "    }\n\n";
+  }
+  os << "  }\n\n";
+
+  // Invisible affinity edges: gently pull each MsgId node toward its owning service.
+  // (Does not affect ranks; only reduces crossings and improves grouping.)
+  os << "  // Affinity edges (invisible)\n";
+  for (auto const& n : msg_nodes) {
+    if (!n.anchor_id.empty()) {
+      os << "  " << n.anchor_id << " -> " << n.id
+         << " [style=invis, weight=60, constraint=false];\n";
+    }
+  }
+  os << "\n";
 
   // Flow: Test Harness -> Network -> Simulator
   os << "  TestCase -> TX [label=\"send_msg\", color=\"#F1F5F9\", penwidth=5];\n";
-  os << "  TX -> " << ub_id << " [label=\"Inbound Traffic:\\n"
-     << dot_escape_label(in_l) << "\", color=\"#F1F5F9\", penwidth=5, fontsize=25];\n\n";
+  os << "  TX -> " << ub_id
+     << " [label=\"udp/9000\", color=\"#F1F5F9\", penwidth=5, fontsize=25];\n\n";
 
-  // Internal Simulator Logic
-  os << "  // Internal Simulator Logic\n";
-  for (auto const& [pair, names] : edge_map) {
-    os << "  " << pair.first << " -> " << pair.second << " [label=\""
-       << dot_escape_label(build_label(names)) << "\", style=dashed];\n";
+  // Message Flow (publish -> MsgId -> subscribe)
+  os << "  // Message Flow (publish -> MsgId -> subscribe)\n";
+  for (auto const& e : msg_edges) {
+    os << "  " << e.first << " -> " << e.second << " [style=dashed];\n";
   }
 
   os << "\n  // Flow: Simulator -> Network -> Test Harness\n";
-  os << "  RX -> " << ub_id << " [label=\"Outbound Traffic:\\n"
-     << dot_escape_label(out_l)
-     << "\", color=\"#F1F5F9\", penwidth=5, dir=back, fontsize=25, arrowtail=normal];\n";
+  os << "  RX -> " << ub_id
+     << " [label=\"udp/9001\", color=\"#F1F5F9\", penwidth=5, dir=back, fontsize=25, "
+        "arrowtail=normal];\n";
   os << "  TestCase -> RX [label=\"recv_msg\", color=\"#F1F5F9\", penwidth=5, dir=back, "
         "arrowtail=normal];\n";
 
