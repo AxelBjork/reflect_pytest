@@ -3,8 +3,9 @@
 
 #include "component.h"
 #include "component_logger.h"
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "simulation_msgs.h"
 
 namespace sil {
 
@@ -19,15 +20,14 @@ class DOC_DESC(
     "$$ v = \\text{RPM} \\times 0.01 \\text{ (m/s)} $$\n\n"
     "$$ x = \\int v \\, dt $$") KinematicsService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::PhysicsTick, ipc::MsgId::KinematicsRequest,
-                                  ipc::MsgId::MotorStatus, ipc::MsgId::ResetRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::KinematicsData>;
+  using Subscribes = ipc::MsgList<MsgId::PhysicsTick, MsgId::KinematicsRequest, MsgId::MotorStatus>;
+  using Publishes = ipc::MsgList<MsgId::KinematicsData>;
 
   explicit KinematicsService(ipc::MessageBus& bus) : bus_(bus), logger_("kinematics") {
     ipc::bind_subscriptions(bus_, this);
   }
 
-  void on_message(const ipc::PhysicsTickPayload& tick) {
+  void on_message(const PhysicsTickPayload& tick) {
     std::lock_guard lk{mu_};
     float dt_s = tick.dt_us / 1e6f;
     speed_mps_ = tick.speed_rpm * K_RPM_TO_MPS;
@@ -42,7 +42,7 @@ class DOC_DESC(
     }
   }
 
-  void on_message(const ipc::MotorStatusPayload& ms) {
+  void on_message(const MotorStatusPayload& ms) {
     std::lock_guard lk{mu_};
     if (ms.is_active && ms.cmd_id != cmd_id_) {
       // New sequence detected
@@ -53,17 +53,8 @@ class DOC_DESC(
     }
   }
 
-  void on_message(const ipc::ResetRequestPayload&) {
-    std::lock_guard lk{mu_};
-    elapsed_us_ = 0;
-    position_m_ = 0.0f;
-    speed_mps_ = 0.0f;
-    cmd_id_ = 0;
-    logger_.info("Physics state reset");
-  }
-
-  void on_message(const ipc::KinematicsRequestPayload&) {
-    ipc::KinematicsPayload p{};
+  void on_message(const KinematicsRequestPayload&) {
+    KinematicsPayload p{};
     {
       std::lock_guard lk{mu_};
       p.cmd_id = cmd_id_;
@@ -71,7 +62,7 @@ class DOC_DESC(
       p.position_m = position_m_;
       p.speed_mps = speed_mps_;
     }
-    bus_.publish<ipc::MsgId::KinematicsData>(p);
+    bus_.publish<MsgId::KinematicsData>(p);
   }
 
  private:

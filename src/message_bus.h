@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "socket_bus.h"  // brings in traits.hpp → messages.hpp
+#include "socket_bus.h"
 
 namespace ipc {
 
@@ -76,8 +76,8 @@ class MessageBus {
   std::unordered_map<uint16_t, std::vector<Handler>> per_id_subs_;
   std::unordered_map<uint16_t, std::vector<std::function<void(const std::any&)>>> local_handlers_;
 
-  void listener_loop();
   void dispatch(RawMessage msg);
+  void listener_loop();
 
   template <MsgId Id>
   static constexpr bool id_has_local_trait() {

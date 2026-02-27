@@ -8,9 +8,10 @@
 #include <string_view>
 #include <type_traits>
 
+#include "autonomous_msgs.h"
 #include "common.h"
-#include "messages.h"
-#include "traits.h"
+#include "core_msgs.h"
+#include "simulation_msgs.h"
 
 using namespace std::string_view_literals;
 
@@ -332,9 +333,9 @@ struct payload_or_void {
 };
 
 template <uint32_t Id>
-struct payload_or_void<
-    Id, std::void_t<typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload>> {
-  using type = typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload;
+struct payload_or_void<Id,
+                       std::void_t<typename MessageTraits<static_cast<MsgId>(Id)>::Payload>> {
+  using type = typename MessageTraits<static_cast<MsgId>(Id)>::Payload;
 };
 
 template <uint32_t Id>
@@ -348,8 +349,8 @@ void generate_struct_for_msg_id(std::set<std::string>& visited) {
 template <typename ActualT, uint32_t Id>
 void emit_metadata_for_actual_type() {
   std::string class_name = get_python_type_name<ActualT>();
-  std::cout << "    MsgId." << ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::name << ": "
-            << class_name << ",\n";
+  std::cout << "    MsgId." << MessageTraits<static_cast<MsgId>(Id)>::name << ": " << class_name
+            << ",\n";
 }
 
 template <uint32_t Id>
@@ -364,7 +365,7 @@ template <uint32_t Id>
 void emit_size_for_msg_id() {
   using T = typename payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
-    std::cout << "    MsgId." << ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::name << ": "
+    std::cout << "    MsgId." << MessageTraits<static_cast<MsgId>(Id)>::name << ": "
               << sizeof(T) << ",\n";
   }
 }

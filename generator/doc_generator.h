@@ -16,10 +16,11 @@
 #include <string_view>
 #include <type_traits>
 
+#include "autonomous_msgs.h"
 #include "common.h"
 #include "component.h"
-#include "messages.h"
-#include "traits.h"
+#include "core_msgs.h"
+#include "simulation_msgs.h"
 
 using namespace std::string_view_literals;
 
@@ -37,12 +38,12 @@ std::string cpp_type_name_str();
 // Component Sub/Pub Helpers
 // -------------------------------------------------------------------------------------------------
 
-template <ipc::MsgId Id>
+template <MsgId Id>
 consteval bool contains_msg(ipc::MsgList<>) {
   return false;
 }
 
-template <ipc::MsgId Id, ipc::MsgId First, ipc::MsgId... Rest>
+template <MsgId Id, MsgId First, MsgId... Rest>
 consteval bool contains_msg(ipc::MsgList<First, Rest...>) {
   if constexpr (Id == First)
     return true;
@@ -50,67 +51,67 @@ consteval bool contains_msg(ipc::MsgList<First, Rest...>) {
     return contains_msg<Id>(ipc::MsgList<Rest...>{});
 }
 
-template <typename Component, ipc::MsgId Id>
+template <typename Component, MsgId Id>
 consteval bool component_subscribes() {
   return contains_msg<Id>(typename Component::Subscribes{});
 }
 
-template <typename Component, ipc::MsgId Id>
+template <typename Component, MsgId Id>
 consteval bool component_publishes() {
   return contains_msg<Id>(typename Component::Publishes{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool internal_cxx_subscribes_impl(std::index_sequence<Is...>) {
   return ((component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() &&
            !std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool internal_cxx_subscribes() {
   return internal_cxx_subscribes_impl<Tuple, Id>(
       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool internal_cxx_publishes_impl(std::index_sequence<Is...>) {
   return ((component_publishes<std::tuple_element_t<Is, Tuple>, Id>() &&
            !std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool internal_cxx_publishes() {
   return internal_cxx_publishes_impl<Tuple, Id>(
       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool py_subscribes_impl(std::index_sequence<Is...>) {
   return ((component_subscribes<std::tuple_element_t<Is, Tuple>, Id>() &&
            std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool py_subscribes() {
   return py_subscribes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 consteval bool py_publishes_impl(std::index_sequence<Is...>) {
   return ((component_publishes<std::tuple_element_t<Is, Tuple>, Id>() &&
            std::is_same_v<std::tuple_element_t<Is, Tuple>, ipc::UdpBridge>) ||
           ...);
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 consteval bool py_publishes() {
   return py_publishes_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 bool print_subscribers_impl(std::index_sequence<Is...>) {
   bool first = true;
   (..., [&]() {
@@ -128,12 +129,12 @@ bool print_subscribers_impl(std::index_sequence<Is...>) {
   return true;
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 bool print_subscribers() {
   return print_subscribers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 bool print_publishers_impl(std::index_sequence<Is...>) {
   bool first = true;
   (..., [&]() {
@@ -151,7 +152,7 @@ bool print_publishers_impl(std::index_sequence<Is...>) {
   return true;
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 bool print_publishers() {
   return print_publishers_impl<Tuple, Id>(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
@@ -366,15 +367,15 @@ struct doc_payload_or_void {
 
 template <uint32_t Id>
 struct doc_payload_or_void<
-    Id, std::void_t<typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload>> {
-  using type = typename ipc::MessageTraits<static_cast<ipc::MsgId>(Id)>::Payload;
+    Id, std::void_t<typename MessageTraits<static_cast<MsgId>(Id)>::Payload>> {
+  using type = typename MessageTraits<static_cast<MsgId>(Id)>::Payload;
 };
 
 template <typename Components, typename Payload, uint32_t Id>
 void emit_md_payload_section() {
   constexpr auto R = ^^Payload;
-  constexpr auto mid = static_cast<ipc::MsgId>(Id);
-  constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
+  constexpr auto mid = static_cast<MsgId>(Id);
+  constexpr std::string_view mname = MessageTraits<mid>::name;
   constexpr doc::Desc desc = get_desc<R>();
   std::string sname;
   if constexpr (std::meta::has_identifier(R)) {
@@ -549,7 +550,7 @@ inline std::string wrap_words(std::string_view s, std::size_t width = 45) {
 // Edge aggregation: maps (src_id, dst_id) -> set of message names.
 using EdgeMap = std::map<std::pair<std::string, std::string>, std::set<std::string>>;
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 void collect_inbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
                                 std::string_view mname) {
   const std::string ub = dot_id("UdpBridge");
@@ -561,13 +562,13 @@ void collect_inbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 void collect_inbound_edges(EdgeMap& edges, std::string_view mname) {
   collect_inbound_edges_impl<Tuple, Id>(edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{},
                                         mname);
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 void collect_outbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
                                  std::string_view mname) {
   const std::string ub = dot_id("UdpBridge");
@@ -579,13 +580,13 @@ void collect_outbound_edges_impl(EdgeMap& edges, std::index_sequence<Is...>,
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 void collect_outbound_edges(EdgeMap& edges, std::string_view mname) {
   collect_outbound_edges_impl<Tuple, Id>(
       edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{}, mname);
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 void collect_internal_edges_impl(EdgeMap& edges, std::index_sequence<Is...>, std::string_view mname,
                                  std::string_view pub_name) {
   (..., [&]() {
@@ -596,7 +597,7 @@ void collect_internal_edges_impl(EdgeMap& edges, std::index_sequence<Is...>, std
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id, std::size_t... Is>
+template <typename Tuple, MsgId Id, std::size_t... Is>
 void collect_internal_edges_pub_impl(EdgeMap& edges, std::index_sequence<Is...>,
                                      std::string_view mname) {
   (..., [&]() {
@@ -609,7 +610,7 @@ void collect_internal_edges_pub_impl(EdgeMap& edges, std::index_sequence<Is...>,
   }());
 }
 
-template <typename Tuple, ipc::MsgId Id>
+template <typename Tuple, MsgId Id>
 void collect_internal_edges(EdgeMap& edges, std::string_view mname) {
   collect_internal_edges_pub_impl<Tuple, Id>(
       edges, std::make_index_sequence<std::tuple_size_v<Tuple>>{}, mname);
@@ -620,8 +621,8 @@ void collect_msg_edges(EdgeMap& edges, std::set<std::string>& inbound_msg_names,
                        std::set<std::string>& outbound_msg_names) {
   using T = typename doc_payload_or_void<Id>::type;
   if constexpr (!std::is_void_v<T>) {
-    constexpr auto mid = static_cast<ipc::MsgId>(Id);
-    constexpr std::string_view mname = ipc::MessageTraits<mid>::name;
+    constexpr auto mid = static_cast<MsgId>(Id);
+    constexpr std::string_view mname = MessageTraits<mid>::name;
     constexpr bool cxx_sub = internal_cxx_subscribes<Components, mid>();
     constexpr bool cxx_pub = internal_cxx_publishes<Components, mid>();
     constexpr bool py_sub = py_subscribes<Components, mid>();
@@ -646,7 +647,7 @@ void collect_msg_edges(EdgeMap& edges, std::set<std::string>& inbound_msg_names,
 
 template <typename Components>
 void emit_graphviz_flow_dot(std::ostream& os) {
-  constexpr std::size_t num_msgs = get_enum_size<ipc::MsgId>();
+  constexpr std::size_t num_msgs = get_enum_size<MsgId>();
 
   os << "digraph IPC {\n";
   os << "  rankdir=LR;\n";
@@ -773,7 +774,7 @@ void emit_graphviz_flow_dot(std::ostream& os) {
   std::set<std::string> outbound_msg_names;
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [&]() {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr auto e = EnumArrHolder<MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       collect_msg_edges<Components, val>(edge_map, inbound_msg_names, outbound_msg_names);
     }());

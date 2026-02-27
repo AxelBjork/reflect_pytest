@@ -125,7 +125,7 @@ digraph IPC {
   }
 
   TestCase -> TX [label="send_msg", color="#F1F5F9", penwidth=5];
-  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nKinematicsData, KinematicsRequest\nMotorSequence, PowerData\nPowerRequest, ResetRequest\nStateRequest, ThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
+  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nKinematicsData, KinematicsRequest\nMotorSequence, PowerData\nPowerRequest, StateRequest\nThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
 
   // Internal Simulator Logic
   AutonomousService -> EnvironmentService [label="InternalEnvRequest", style=dashed];
@@ -145,13 +145,13 @@ digraph IPC {
   StateService -> ThermalService [label="PhysicsTick", style=dashed];
   StateService -> UdpBridge [label="StateData", style=dashed];
   ThermalService -> UdpBridge [label="ThermalData", style=dashed];
-  UdpBridge -> AutonomousService [label="AutoDriveCommand, KinematicsData\nPowerData, ResetRequest", style=dashed];
-  UdpBridge -> EnvironmentService [label="EnvironmentData, ResetRequest", style=dashed];
-  UdpBridge -> KinematicsService [label="KinematicsRequest, ResetRequest", style=dashed];
-  UdpBridge -> MotorService [label="MotorSequence, ResetRequest", style=dashed];
-  UdpBridge -> PowerService [label="PowerRequest, ResetRequest", style=dashed];
+  UdpBridge -> AutonomousService [label="AutoDriveCommand, KinematicsData\nPowerData", style=dashed];
+  UdpBridge -> EnvironmentService [label="EnvironmentData", style=dashed];
+  UdpBridge -> KinematicsService [label="KinematicsRequest", style=dashed];
+  UdpBridge -> MotorService [label="MotorSequence", style=dashed];
+  UdpBridge -> PowerService [label="PowerRequest", style=dashed];
   UdpBridge -> StateService [label="StateRequest", style=dashed];
-  UdpBridge -> ThermalService [label="EnvironmentData, ResetRequest\nThermalRequest", style=dashed];
+  UdpBridge -> ThermalService [label="EnvironmentData, ThermalRequest", style=dashed];
 
   // Flow: Simulator -> Network -> Test Harness
   RX -> UdpBridge [label="Outbound Traffic:\nAutoDriveStatus, EnvironmentAck\nEnvironmentRequest, KinematicsData\nKinematicsRequest, Log\nMotorSequence, PowerData\nPowerRequest, StateData\nThermalData", color="#F1F5F9", penwidth=5, dir=back, fontsize=25, arrowtail=normal];

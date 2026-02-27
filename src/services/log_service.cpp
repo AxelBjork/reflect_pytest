@@ -7,15 +7,15 @@
 
 namespace sil {
 
-static constexpr const char* sev_str(ipc::Severity s) {
+static constexpr const char* sev_str(Severity s) {
   switch (s) {
-    case ipc::Severity::Debug:
+    case Severity::Debug:
       return "DEBUG";
-    case ipc::Severity::Info:
+    case Severity::Info:
       return "INFO";
-    case ipc::Severity::Warn:
+    case Severity::Warn:
       return "WARN";
-    case ipc::Severity::Error:
+    case Severity::Error:
       return "ERROR";
   }
   return "?";
@@ -36,7 +36,7 @@ LogService::~LogService() {
   if (worker_thread_.joinable()) worker_thread_.join();
 }
 
-void LogService::log(const ipc::LogPayload& p) {
+void LogService::log(const LogPayload& p) {
   {
     std::lock_guard lk{mu_};
     queue_.push(p);
@@ -46,7 +46,7 @@ void LogService::log(const ipc::LogPayload& p) {
 
 void LogService::worker_loop() {
   while (true) {
-    std::queue<ipc::LogPayload> to_process;
+    std::queue<::LogPayload> to_process;
     {
       std::unique_lock lk{mu_};
       cv_.wait(lk, [this] { return !queue_.empty() || !running_; });
@@ -63,7 +63,7 @@ void LogService::worker_loop() {
       std::fflush(stdout);
 
       // 2. Publish to message bus so UdpBridge can send it to Python
-      bus_.publish<ipc::MsgId::Log>(p);
+      bus_.publish<MsgId::Log>(p);
     }
   }
 }

@@ -55,9 +55,9 @@ int main() {
                        [&] { return !g_running.load(std::memory_order_acquire); });
       }
       if (!g_running.load(std::memory_order_acquire)) break;
-      ipc::LogPayload p{};
+      LogPayload p{};
       std::snprintf(p.text, sizeof(p.text), "[heartbeat] TICK %u", ++n);
-      p.severity = ipc::Severity::Info;
+      p.severity = Severity::Info;
       std::strncpy(p.component, "main", sizeof(p.component) - 1);
       log_service.log(p);
     }

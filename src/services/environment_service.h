@@ -4,11 +4,10 @@
 #include <mutex>
 #include <vector>
 
+#include "autonomous_msgs.h"
 #include "component.h"
 #include "component_logger.h"
-#include "internal_messages.h"
 #include "message_bus.h"
-#include "messages.h"
 
 namespace sil {
 
@@ -20,23 +19,21 @@ class DOC_DESC(
     "like AutonomousService to access stable map regions without data copying or direct component "
     "coupling.") EnvironmentService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::EnvironmentData, ipc::MsgId::ResetRequest,
-                                  ipc::MsgId::InternalEnvRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::EnvironmentAck, ipc::MsgId::EnvironmentRequest,
-                                 ipc::MsgId::InternalEnvData>;
+  using Subscribes = ipc::MsgList<MsgId::EnvironmentData, MsgId::InternalEnvRequest>;
+  using Publishes =
+      ipc::MsgList<MsgId::EnvironmentAck, MsgId::EnvironmentRequest, MsgId::InternalEnvData>;
 
   explicit EnvironmentService(ipc::MessageBus& bus);
 
-  void on_message(const ipc::EnvironmentPayload& env);
-  void on_message(const ipc::ResetRequestPayload& req);
-  void on_message(const ipc::InternalEnvRequestPayload& req);
+  void on_message(const EnvironmentPayload& env);
+  void on_message(const InternalEnvRequestPayload& req);
 
  private:
   ipc::MessageBus& bus_;
   ComponentLogger logger_;
   std::recursive_mutex mu_;
 
-  std::vector<std::shared_ptr<ipc::EnvironmentPayload>> cache_;
+  std::vector<std::shared_ptr<::EnvironmentPayload>> cache_;
   std::chrono::steady_clock::time_point last_request_time_{};
 };
 

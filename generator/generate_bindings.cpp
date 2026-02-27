@@ -7,20 +7,20 @@ int main() {
   std::cout << "from enum import IntEnum\n\n";
 
   // ── Enums ──────────────────────────────────────────────────────────────────
-  generate_enum<ipc::MsgId>();
-  generate_enum<ipc::Severity>();
-  generate_enum<ipc::SystemState>();
-  generate_enum<ipc::DriveMode>();
+  generate_enum<MsgId>();
+  generate_enum<Severity>();
+  generate_enum<SystemState>();
+  generate_enum<::DriveMode>();
 
   // ── Helper structs (not top-level messages) ────────────────────────────────
   std::set<std::string> visited;
-  generate_struct<ipc::MotorSubCmd>(visited);
+  generate_struct<::MotorSubCmd>(visited);
 
   // ── Message payload structs ────────────────────────────────────────────────
-  constexpr std::size_t num_msgs = get_enum_size<ipc::MsgId>();
+  constexpr std::size_t num_msgs = get_enum_size<MsgId>();
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [&] {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr auto e = EnumArrHolder<MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       generate_struct_for_msg_id<val>(visited);
     }());
@@ -29,7 +29,7 @@ int main() {
   std::cout << "MESSAGE_BY_ID = {\n";
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr auto e = EnumArrHolder<MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       emit_metadata_for_msg_id<val>();
     }());
@@ -39,7 +39,7 @@ int main() {
   std::cout << "PAYLOAD_SIZE_BY_ID = {\n";
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, num_msgs>::arr[Is];
+      constexpr auto e = EnumArrHolder<MsgId, num_msgs>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       emit_size_for_msg_id<val>();
     }());

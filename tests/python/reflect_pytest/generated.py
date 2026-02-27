@@ -7,39 +7,37 @@ from enum import IntEnum
 class MsgId(IntEnum):
     """Top-level message type selector. The uint16_t wire value is the first two bytes of every UDP datagram."""
     Log = 0
-    StateRequest = 1
-    StateData = 2
-    MotorSequence = 3
-    KinematicsRequest = 4
-    KinematicsData = 5
-    PowerRequest = 6
-    PowerData = 7
-    ThermalRequest = 8
-    ThermalData = 9
-    EnvironmentAck = 10
-    EnvironmentRequest = 11
-    EnvironmentData = 12
-    AutoDriveCommand = 13
-    AutoDriveStatus = 14
-    MotorStatus = 15
-    PhysicsTick = 16
-    ResetRequest = 17
-    InternalEnvRequest = 18
-    InternalEnvData = 19
+    PhysicsTick = 1
+    StateRequest = 2
+    StateData = 3
+    MotorSequence = 10
+    MotorStatus = 11
+    KinematicsRequest = 20
+    KinematicsData = 21
+    PowerRequest = 30
+    PowerData = 31
+    ThermalRequest = 40
+    ThermalData = 41
+    EnvironmentAck = 50
+    EnvironmentRequest = 51
+    EnvironmentData = 52
+    AutoDriveCommand = 60
+    AutoDriveStatus = 61
+    InternalEnvRequest = 1000
+    InternalEnvData = 1001
 
 class Severity(IntEnum):
-    """Severity level attached to every LogPayload message."""
     Debug = 0
     Info = 1
     Warn = 2
     Error = 3
 
 class SystemState(IntEnum):
-    """Coarse lifecycle state of the SIL simulator."""
     Init = 0
     Ready = 1
     Executing = 2
-    Fault = 3
+    Stopping = 3
+    Fault = 4
 
 class DriveMode(IntEnum):
     """Control strategy for the autonomous service."""
@@ -85,6 +83,26 @@ class LogPayload:
         text, severity, component = struct.unpack_from("<255sB32s", data, offset)
         offset += struct.calcsize("<255sB32s")
         return cls(text=text, severity=severity, component=component)
+
+@dataclass
+class PhysicsTickPayload:
+    """Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration."""
+    WIRE_SIZE = 10
+    cmd_id: int
+    speed_rpm: int
+    dt_us: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<IhI", self.cmd_id, self.speed_rpm, self.dt_us))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "PhysicsTickPayload":
+        offset = 0
+        cmd_id, speed_rpm, dt_us = struct.unpack_from("<IhI", data, offset)
+        offset += struct.calcsize("<IhI")
+        return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, dt_us=dt_us)
 
 @dataclass
 class StateRequestPayload:
@@ -156,6 +174,26 @@ class MotorSequencePayloadTemplate_5:
             steps.append(item)
             offset += sub_size
         return cls(cmd_id=cmd_id, num_steps=num_steps, steps=steps)
+
+@dataclass
+class MotorStatusPayload:
+    """Internal IPC: Periodic RPM and activity update from MotorService."""
+    WIRE_SIZE = 7
+    cmd_id: int
+    speed_rpm: int
+    is_active: bool
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<Ih?", self.cmd_id, self.speed_rpm, self.is_active))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "MotorStatusPayload":
+        offset = 0
+        cmd_id, speed_rpm, is_active = struct.unpack_from("<Ih?", data, offset)
+        offset += struct.calcsize("<Ih?")
+        return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, is_active=is_active)
 
 @dataclass
 class KinematicsRequestPayload:
@@ -579,64 +617,6 @@ class AutoDriveStatusTemplate_8__4:
         return cls(cmd_id=cmd_id, current_node_idx=current_node_idx, route_complete=route_complete, num_stats=num_stats, node_stats=node_stats, num_environments_used=num_environments_used, environment_ids=environment_ids)
 
 @dataclass
-class MotorStatusPayload:
-    """Internal IPC: Periodic RPM and activity update from MotorService."""
-    WIRE_SIZE = 7
-    cmd_id: int
-    speed_rpm: int
-    is_active: bool
-
-    def pack_wire(self) -> bytes:
-        data = bytearray()
-        data.extend(struct.pack("<Ih?", self.cmd_id, self.speed_rpm, self.is_active))
-        return bytes(data)
-
-    @classmethod
-    def unpack_wire(cls, data: bytes) -> "MotorStatusPayload":
-        offset = 0
-        cmd_id, speed_rpm, is_active = struct.unpack_from("<Ih?", data, offset)
-        offset += struct.calcsize("<Ih?")
-        return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, is_active=is_active)
-
-@dataclass
-class PhysicsTickPayload:
-    """Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration."""
-    WIRE_SIZE = 10
-    cmd_id: int
-    speed_rpm: int
-    dt_us: int
-
-    def pack_wire(self) -> bytes:
-        data = bytearray()
-        data.extend(struct.pack("<IhI", self.cmd_id, self.speed_rpm, self.dt_us))
-        return bytes(data)
-
-    @classmethod
-    def unpack_wire(cls, data: bytes) -> "PhysicsTickPayload":
-        offset = 0
-        cmd_id, speed_rpm, dt_us = struct.unpack_from("<IhI", data, offset)
-        offset += struct.calcsize("<IhI")
-        return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, dt_us=dt_us)
-
-@dataclass
-class ResetRequestPayload:
-    """One-byte sentinel. Send to request a full physics reset."""
-    WIRE_SIZE = 1
-    reserved: int
-
-    def pack_wire(self) -> bytes:
-        data = bytearray()
-        data.extend(struct.pack("<B", self.reserved))
-        return bytes(data)
-
-    @classmethod
-    def unpack_wire(cls, data: bytes) -> "ResetRequestPayload":
-        offset = 0
-        reserved = struct.unpack_from("<B", data, offset)[0]
-        offset += struct.calcsize("<B")
-        return cls(reserved=reserved)
-
-@dataclass
 class InternalEnvRequestPayload:
     WIRE_SIZE = 8
     x: float
@@ -686,9 +666,11 @@ class InternalEnvDataPayload:
 
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
+    MsgId.PhysicsTick: PhysicsTickPayload,
     MsgId.StateRequest: StateRequestPayload,
     MsgId.StateData: StatePayload,
     MsgId.MotorSequence: MotorSequencePayloadTemplate_5,
+    MsgId.MotorStatus: MotorStatusPayload,
     MsgId.KinematicsRequest: KinematicsRequestPayload,
     MsgId.KinematicsData: KinematicsPayload,
     MsgId.PowerRequest: PowerRequestPayload,
@@ -700,18 +682,17 @@ MESSAGE_BY_ID = {
     MsgId.EnvironmentData: EnvironmentPayload,
     MsgId.AutoDriveCommand: AutoDriveCommandTemplate_8,
     MsgId.AutoDriveStatus: AutoDriveStatusTemplate_8__4,
-    MsgId.MotorStatus: MotorStatusPayload,
-    MsgId.PhysicsTick: PhysicsTickPayload,
-    MsgId.ResetRequest: ResetRequestPayload,
     MsgId.InternalEnvRequest: InternalEnvRequestPayload,
     MsgId.InternalEnvData: InternalEnvDataPayload,
 }
 
 PAYLOAD_SIZE_BY_ID = {
     MsgId.Log: 288,
+    MsgId.PhysicsTick: 10,
     MsgId.StateRequest: 1,
     MsgId.StateData: 1,
     MsgId.MotorSequence: 35,
+    MsgId.MotorStatus: 7,
     MsgId.KinematicsRequest: 1,
     MsgId.KinematicsData: 16,
     MsgId.PowerRequest: 1,
@@ -723,9 +704,6 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.EnvironmentData: 32,
     MsgId.AutoDriveCommand: 171,
     MsgId.AutoDriveStatus: 152,
-    MsgId.MotorStatus: 7,
-    MsgId.PhysicsTick: 10,
-    MsgId.ResetRequest: 1,
     MsgId.InternalEnvRequest: 8,
     MsgId.InternalEnvData: 16,
 }

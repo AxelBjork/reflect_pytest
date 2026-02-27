@@ -155,6 +155,47 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 </details>
 
 <details>
+<summary><font size="+1"><b>MsgId::PhysicsTick (PhysicsTickPayload)</b></font></summary>
+
+> Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration.
+
+**Direction:** `Internal`<br>
+**Publishes:** `StateService`<br>
+**Subscribes:** `MotorService`, `KinematicsService`, `PowerService`, `ThermalService`, `AutonomousService`<br>
+**Wire size:** 10 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cmd_id</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>speed_rpm</td>
+      <td>int16_t</td>
+      <td>int</td>
+      <td>2</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>dt_us</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>6</td>
+    </tr>
+  </tbody>
+</table>
+
+</details>
+
+<details>
 <summary><font size="+1"><b>MsgId::StateRequest (StateRequestPayload)</b></font></summary>
 
 > One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored.
@@ -288,6 +329,47 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>int</td>
       <td>4</td>
       <td>2</td>
+    </tr>
+  </tbody>
+</table>
+
+</details>
+
+<details>
+<summary><font size="+1"><b>MsgId::MotorStatus (MotorStatusPayload)</b></font></summary>
+
+> Internal IPC: Periodic RPM and activity update from MotorService.
+
+**Direction:** `Internal`<br>
+**Publishes:** `MotorService`<br>
+**Subscribes:** `KinematicsService`, `PowerService`, `StateService`<br>
+**Wire size:** 7 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cmd_id</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>speed_rpm</td>
+      <td>int16_t</td>
+      <td>int</td>
+      <td>2</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>is_active</td>
+      <td>bool</td>
+      <td>bool</td>
+      <td>1</td>
+      <td>6</td>
     </tr>
   </tbody>
 </table>
@@ -1059,114 +1141,6 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>uint32_t</td>
       <td>int</td>
       <td>4</td>
-      <td>0</td>
-    </tr>
-  </tbody>
-</table>
-
-</details>
-
-<details>
-<summary><font size="+1"><b>MsgId::MotorStatus (MotorStatusPayload)</b></font></summary>
-
-> Internal IPC: Periodic RPM and activity update from MotorService.
-
-**Direction:** `Internal`<br>
-**Publishes:** `MotorService`<br>
-**Subscribes:** `KinematicsService`, `PowerService`, `StateService`<br>
-**Wire size:** 7 bytes
-
-<table>
-  <thead>
-    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>cmd_id</td>
-      <td>uint32_t</td>
-      <td>int</td>
-      <td>4</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>speed_rpm</td>
-      <td>int16_t</td>
-      <td>int</td>
-      <td>2</td>
-      <td>4</td>
-    </tr>
-    <tr>
-      <td>is_active</td>
-      <td>bool</td>
-      <td>bool</td>
-      <td>1</td>
-      <td>6</td>
-    </tr>
-  </tbody>
-</table>
-
-</details>
-
-<details>
-<summary><font size="+1"><b>MsgId::PhysicsTick (PhysicsTickPayload)</b></font></summary>
-
-> Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration.
-
-**Direction:** `Internal`<br>
-**Publishes:** `StateService`<br>
-**Subscribes:** `MotorService`, `KinematicsService`, `PowerService`, `ThermalService`, `AutonomousService`<br>
-**Wire size:** 10 bytes
-
-<table>
-  <thead>
-    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>cmd_id</td>
-      <td>uint32_t</td>
-      <td>int</td>
-      <td>4</td>
-      <td>0</td>
-    </tr>
-    <tr>
-      <td>speed_rpm</td>
-      <td>int16_t</td>
-      <td>int</td>
-      <td>2</td>
-      <td>4</td>
-    </tr>
-    <tr>
-      <td>dt_us</td>
-      <td>uint32_t</td>
-      <td>int</td>
-      <td>4</td>
-      <td>6</td>
-    </tr>
-  </tbody>
-</table>
-
-</details>
-
-<details>
-<summary><font size="+1"><b>MsgId::ResetRequest (ResetRequestPayload)</b></font></summary>
-
-> One-byte sentinel. Send to request a full physics reset.
-
-**Direction:** `Inbound`<br>
-**Subscribes:** `MotorService`, `KinematicsService`, `PowerService`, `ThermalService`, `EnvironmentService`, `AutonomousService`<br>
-**Wire size:** 1 bytes
-
-<table>
-  <thead>
-    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>reserved</td>
-      <td>uint8_t</td>
-      <td>int</td>
-      <td>1</td>
       <td>0</td>
     </tr>
   </tbody>

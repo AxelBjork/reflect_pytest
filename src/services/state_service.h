@@ -6,8 +6,10 @@
 
 #include "component.h"
 #include "component_logger.h"
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "msg_base.h"
+#include "simulation_msgs.h"
 
 namespace sil {
 
@@ -16,8 +18,8 @@ class DOC_DESC(
     "This component tracks the system state and generates the 100Hz `PhysicsTick` "
     "heartbeat that drives all other simulation services.") StateService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::StateRequest, ipc::MsgId::MotorStatus>;
-  using Publishes = ipc::MsgList<ipc::MsgId::StateData, ipc::MsgId::PhysicsTick>;
+  using Subscribes = ipc::MsgList<MsgId::StateRequest, MsgId::MotorStatus>;
+  using Publishes = ipc::MsgList<MsgId::StateData, MsgId::PhysicsTick>;
 
   explicit StateService(ipc::MessageBus& bus);
   ~StateService();
@@ -25,14 +27,14 @@ class DOC_DESC(
   StateService(const StateService&) = delete;
   StateService& operator=(const StateService&) = delete;
 
-  void on_message(const ipc::StateRequestPayload&);
-  void on_message(const ipc::MotorStatusPayload& ms);
+  void on_message(const StateRequestPayload&);
+  void on_message(const MotorStatusPayload& ms);
 
  private:
   ipc::TypedPublisher<StateService> bus_;
   ComponentLogger logger_;
   std::mutex mu_;
-  ipc::SystemState state_{ipc::SystemState::Ready};
+  SystemState state_{SystemState::Ready};
 
   // Clock variables
   std::thread clock_thread_;

@@ -20,7 +20,6 @@ from reflect_pytest.generated import (
     MsgId,
     SystemState,
     StateRequestPayload,
-    ResetRequestPayload,
 )
 from udp_client import UdpClient
 
@@ -178,7 +177,7 @@ def _sil_binary() -> Path:
     return path
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def sil_process():
     """Launch sil_app for the test session; terminate it afterwards."""
     proc = subprocess.Popen([str(_sil_binary())])
@@ -191,7 +190,7 @@ def sil_process():
         proc.wait()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def udp(sil_process):
     """Fresh UDP client per test; waits for Ready before yielding."""
     with UdpClient(client_port=0) as client:
@@ -216,12 +215,3 @@ def udp(sil_process):
         yield client
 
 
-@pytest.fixture(scope="function", autouse=True)
-def reset_sim(udp):
-    """Automatically reset simulation state before every test."""
-    udp.drain()
-    udp.send_msg(MsgId.ResetRequest, ResetRequestPayload(reserved=0))
-    # Tiny sleep to ensure C++ processes it before the next command
-    # and to allow any last-second messages to arrive and be drained
-    time.sleep(0.01)
-    udp.drain()

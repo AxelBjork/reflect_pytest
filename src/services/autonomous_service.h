@@ -5,28 +5,28 @@
 #include <mutex>
 #include <vector>
 
+#include "autonomous_msgs.h"
 #include "component.h"
 #include "component_logger.h"
-#include "internal_messages.h"
+#include "core_msgs.h"
 #include "message_bus.h"
-#include "messages.h"
+#include "simulation_msgs.h"
 
 namespace sil {
 
 class DOC_DESC("High level autonomous driving service.") AutonomousService {
  public:
-  using Subscribes = ipc::MsgList<ipc::MsgId::AutoDriveCommand, ipc::MsgId::KinematicsData,
-                                  ipc::MsgId::PhysicsTick, ipc::MsgId::PowerData,
-                                  ipc::MsgId::InternalEnvData, ipc::MsgId::ResetRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::MotorSequence, ipc::MsgId::AutoDriveStatus,
-                                 ipc::MsgId::KinematicsRequest, ipc::MsgId::PowerRequest,
-                                 ipc::MsgId::InternalEnvRequest>;
+  using Subscribes = ipc::MsgList<MsgId::AutoDriveCommand, MsgId::KinematicsData,
+                                  MsgId::PhysicsTick, MsgId::PowerData, MsgId::InternalEnvData>;
+  using Publishes =
+      ipc::MsgList<MsgId::MotorSequence, MsgId::AutoDriveStatus, MsgId::KinematicsRequest,
+                   MsgId::PowerRequest, MsgId::InternalEnvRequest>;
 
   explicit AutonomousService(ipc::MessageBus& bus) : bus_(bus), logger_("auto") {
     ipc::bind_subscriptions(bus_, this);
   }
 
-  void on_message(const ipc::AutoDriveCommandPayload& cmd) {
+  void on_message(const AutoDriveCommandPayload& cmd) {
     std::lock_guard lk{mu_};
     logger_.info("Received AutoDriveCommand: route %s (%u nodes)", cmd.route_name, cmd.num_nodes);
 
@@ -50,18 +50,7 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
     }
   }
 
-  void on_message(const ipc::ResetRequestPayload& msg) {
-    std::lock_guard lk{mu_};
-    route_active_ = false;
-    current_node_idx_ = 0;
-    current_env_ptr_ = nullptr;
-    used_envs_.clear();
-    status_ = {};
-    last_pos_m_ = 0.0f;
-    logger_.info("Autonomous state reset");
-  }
-
-  void on_message(const ipc::InternalEnvDataPayload& env) {
+  void on_message(const InternalEnvDataPayload& env) {
     std::lock_guard lk{mu_};
     current_env_ptr_ = env.ptr;
 
@@ -76,36 +65,27 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
     }
   }
 
-  void on_message(const ipc::PowerPayload& power) {
+  void on_message(const PowerPayload& power) {
     std::lock_guard lk{mu_};
     float watt = power.voltage_v * power.current_a;
     current_total_energy_j_ += watt * 0.01f;
   }
 
-  void on_message(const ipc::KinematicsPayload& kin) {
+  void on_message(const KinematicsPayload& kin) {
     std::lock_guard lk{mu_};
     if (!route_active_ || current_node_idx_ >= cmd_.num_nodes) {
       last_pos_m_ = kin.position_m;
       return;
     }
 
-    static uint32_t kin_count = 0;
-    logger_.info("Pos: %.3f, Node: %u, Env: %s", kin.position_m, current_node_idx_,
-                 current_env_ptr_ ? std::to_string(current_env_ptr_->region_id).c_str() : "None");
-
     const auto& node = cmd_.route[current_node_idx_];
-    float dist = std::abs(node.target_pos.x - kin.position_m);
 
     // Phase 2: Check environment bounds if enabled
     if (cmd_.use_environment_tuning) {
       if (!current_env_ptr_ || kin.position_m < current_env_ptr_->bounds.min_pt.x ||
           kin.position_m > current_env_ptr_->bounds.max_pt.x) {
         // Request environment data via internal bus
-        bus_.publish<ipc::MsgId::InternalEnvRequest>(
-            ipc::InternalEnvRequestPayload{kin.position_m, 0.0f});
-
-        // If we still don't have it (async), we might need an external request
-        // but the EnvironmentService will handle that and publish back once it arrives.
+        bus_.publish<MsgId::InternalEnvRequest>(InternalEnvRequestPayload{kin.position_m, 0.0f});
       }
     }
 
@@ -142,23 +122,23 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
         logger_.info("Route complete.");
 
         // Phase 3: Publish final status BEFORE stopping the motor/releasing state
-        bus_.publish<ipc::MsgId::AutoDriveStatus>(status_);
+        bus_.publish<MsgId::AutoDriveStatus>(status_);
 
         // Stop the motor
-        ipc::MotorSequencePayload seq{};
+        MotorSequencePayload seq{};
         seq.num_steps = 1;
         seq.steps[0] = {0, 0};  // Stop
-        bus_.publish<ipc::MsgId::MotorSequence>(seq);
+        bus_.publish<MsgId::MotorSequence>(seq);
       }
     }
     last_pos_m_ = kin.position_m;
   }
 
-  void on_message(const ipc::PhysicsTickPayload&) {
+  void on_message(const PhysicsTickPayload&) {
     std::lock_guard lk{mu_};
     if (route_active_) {
-      bus_.publish<ipc::MsgId::KinematicsRequest>({0});
-      bus_.publish<ipc::MsgId::PowerRequest>({0});
+      bus_.publish<MsgId::KinematicsRequest>({0});
+      bus_.publish<MsgId::PowerRequest>({0});
     }
   }
 
@@ -176,27 +156,27 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
       }
     }
 
-    ipc::MotorSequencePayload seq{};
+    MotorSequencePayload seq{};
     seq.cmd_id = 999;
     seq.num_steps = 1;
     seq.steps[0] = {speed, node.timeout_ms * 1000u};
 
-    bus_.publish<ipc::MsgId::MotorSequence>(seq);
+    bus_.publish<MsgId::MotorSequence>(seq);
   }
 
   ipc::MessageBus& bus_;
   ComponentLogger logger_;
   std::recursive_mutex mu_;
 
-  ipc::AutoDriveCommandPayload cmd_{};
+  AutoDriveCommandPayload cmd_{};
   uint8_t current_node_idx_{0};
   bool route_active_{false};
 
   // Lifetime-tracked pointer to active environment
-  std::shared_ptr<const ipc::EnvironmentPayload> current_env_ptr_{nullptr};
+  std::shared_ptr<const EnvironmentPayload> current_env_ptr_{nullptr};
 
   // Phase 3: Telemetry
-  ipc::AutoDriveStatusPayload status_{};
+  AutoDriveStatusPayload status_{};
   float current_total_energy_j_{0.0f};
   float node_start_energy_j_{0.0f};
   float node_start_pos_m_{0.0f};

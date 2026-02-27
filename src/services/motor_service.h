@@ -3,7 +3,8 @@
 
 #include "component.h"
 #include "component_logger.h"
-#include "messages.h"
+#include "core_msgs.h"
+#include "simulation_msgs.h"
 
 namespace sil {
 
@@ -13,9 +14,8 @@ class DOC_DESC(
     "in response to `PhysicsTick` events, and reporting its status via `MotorStatus` messages.")
     MotorService {
  public:
-  using Subscribes =
-      ipc::MsgList<ipc::MsgId::MotorSequence, ipc::MsgId::PhysicsTick, ipc::MsgId::ResetRequest>;
-  using Publishes = ipc::MsgList<ipc::MsgId::MotorStatus>;
+  using Subscribes = ipc::MsgList<MsgId::MotorSequence, MsgId::PhysicsTick>;
+  using Publishes = ipc::MsgList<MsgId::MotorStatus>;
 
   explicit MotorService(ipc::MessageBus& bus);
   ~MotorService() = default;
@@ -23,9 +23,8 @@ class DOC_DESC(
   MotorService(const MotorService&) = delete;
   MotorService& operator=(const MotorService&) = delete;
 
-  void on_message(const ipc::MotorSequencePayload& cmd);
-  void on_message(const ipc::PhysicsTickPayload& tick);
-  void on_message(const ipc::ResetRequestPayload& msg);
+  void on_message(const MotorSequencePayload& cmd);
+  void on_message(const PhysicsTickPayload& tick);
 
  private:
   ipc::TypedPublisher<MotorService> bus_;
@@ -33,7 +32,7 @@ class DOC_DESC(
   std::mutex mu_;
 
   bool active_{false};
-  ipc::MotorSequencePayload current_cmd_{};
+  MotorSequencePayload current_cmd_{};
   uint8_t current_step_idx_{0};
   uint32_t step_remaining_us_{0};
 

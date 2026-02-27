@@ -3,7 +3,6 @@ import time
 from udp_client import UdpClient
 from reflect_pytest.generated import (
     MsgId,
-    ResetRequestPayload,
     StateRequestPayload,
     AutoDriveCommandTemplate_8,
     DriveMode,
@@ -17,9 +16,6 @@ from reflect_pytest.generated import (
     MotorSequencePayloadTemplate_5
 )
 
-def reset_sim(udp: UdpClient):
-    udp.send_msg(MsgId.ResetRequest, ResetRequestPayload(reserved=0))
-    time.sleep(0.05)
 
 def wait_for_state(udp: UdpClient, target_state: int, timeout_s: float = 1.0):
     start = time.time()
@@ -36,7 +32,6 @@ def wait_for_state(udp: UdpClient, target_state: int, timeout_s: float = 1.0):
 
 def test_autonomous_service_phase1_route(udp):
     """Test that AutoDriveCommand is accurately serialized and the C++ AutonomousService dispatches MotorSequences."""
-    reset_sim(udp)
     assert wait_for_state(udp, 1)  # Ready
 
     # Construct complex nested struct payload
@@ -75,7 +70,6 @@ def test_autonomous_service_phase1_route(udp):
 
 def test_autonomous_service_phase2_environment(udp):
     """Test that AutonomousService requests new environment data when moving out of bounds."""
-    reset_sim(udp)
     assert wait_for_state(udp, 1)
 
     # 1. Send initial environment for region 0 [0, 5]
@@ -143,7 +137,6 @@ def test_autonomous_service_phase2_environment(udp):
 
 def test_autonomous_service_phase3_telemetry(udp):
     """Test that AutonomousService reports energy and environment telemetry."""
-    reset_sim(udp)
     assert wait_for_state(udp, 1)
 
     # Send initial environment

@@ -7,7 +7,10 @@
 #include <meta>
 #include <string_view>
 
-#include "messages.h"
+#include "autonomous_msgs.h"
+#include "core_msgs.h"
+#include "msg_base.h"
+#include "simulation_msgs.h"
 
 // -------------------------------------------------------------------------------------------------
 // Annotation readers

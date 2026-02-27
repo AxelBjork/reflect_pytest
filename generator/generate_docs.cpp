@@ -13,11 +13,11 @@ template <typename Components>
 void emit_payloads() {
   [&]<std::size_t... Is>(std::index_sequence<Is...>) {
     (..., [] {
-      constexpr auto e = EnumArrHolder<ipc::MsgId, get_enum_size<ipc::MsgId>()>::arr[Is];
+      constexpr auto e = EnumArrHolder<MsgId, get_enum_size<MsgId>()>::arr[Is];
       constexpr uint32_t val = static_cast<uint32_t>([:e:]);
       emit_md_payload_section_for_msg_id<Components, val>();
     }());
-  }(std::make_index_sequence<get_enum_size<ipc::MsgId>()>{});
+  }(std::make_index_sequence<get_enum_size<MsgId>()>{});
 }
 
 template <typename Components>

@@ -10,8 +10,11 @@
 #include <mutex>
 #include <thread>
 
+#include "autonomous_msgs.h"
 #include "component.h"
+#include "core_msgs.h"
 #include "message_bus.h"
+#include "simulation_msgs.h"
 
 namespace ipc {
 
@@ -28,8 +31,8 @@ class DOC_DESC(
                              MsgId::ThermalData, MsgId::EnvironmentAck, MsgId::AutoDriveStatus,
                              MsgId::EnvironmentRequest>;
   using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
-                            MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::ResetRequest,
-                            MsgId::AutoDriveCommand, MsgId::EnvironmentData>;
+                            MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::AutoDriveCommand,
+                            MsgId::EnvironmentData>;
 
   static constexpr uint16_t kDefaultPort = 9000;
 
