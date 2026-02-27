@@ -48,20 +48,20 @@ class DriveMode(IntEnum):
 @dataclass
 class MotorSubCmd:
     """One timed motor command step, embedded in MotorSequencePayload."""
-    WIRE_SIZE = 6
+    WIRE_SIZE = 8
     speed_rpm: int
     duration_us: int
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<hI", self.speed_rpm, self.duration_us))
+        data.extend(struct.pack("<h2xI", self.speed_rpm, self.duration_us))
         return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "MotorSubCmd":
         offset = 0
-        speed_rpm, duration_us = struct.unpack_from("<hI", data, offset)
-        offset += struct.calcsize("<hI")
+        speed_rpm, duration_us = struct.unpack_from("<h2xI", data, offset)
+        offset += struct.calcsize("<h2xI")
         return cls(speed_rpm=speed_rpm, duration_us=duration_us)
 
 @dataclass
@@ -87,21 +87,21 @@ class LogPayload:
 @dataclass
 class PhysicsTickPayload:
     """Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration."""
-    WIRE_SIZE = 10
+    WIRE_SIZE = 12
     cmd_id: int
     speed_rpm: int
     dt_us: int
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<IhI", self.cmd_id, self.speed_rpm, self.dt_us))
+        data.extend(struct.pack("<Ih2xI", self.cmd_id, self.speed_rpm, self.dt_us))
         return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "PhysicsTickPayload":
         offset = 0
-        cmd_id, speed_rpm, dt_us = struct.unpack_from("<IhI", data, offset)
-        offset += struct.calcsize("<IhI")
+        cmd_id, speed_rpm, dt_us = struct.unpack_from("<Ih2xI", data, offset)
+        offset += struct.calcsize("<Ih2xI")
         return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, dt_us=dt_us)
 
 @dataclass
@@ -143,14 +143,14 @@ class StatePayload:
 @dataclass
 class MotorSequencePayloadTemplate_5:
     """Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence."""
-    WIRE_SIZE = 35
+    WIRE_SIZE = 48
     cmd_id: int
     num_steps: int
     steps: list[MotorSubCmd]
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<IB", self.cmd_id, self.num_steps))
+        data.extend(struct.pack("<IB3x", self.cmd_id, self.num_steps))
         for item in self.steps:
             if not hasattr(item, 'pack_wire'):
                 if isinstance(item, tuple):
@@ -165,8 +165,8 @@ class MotorSequencePayloadTemplate_5:
     @classmethod
     def unpack_wire(cls, data: bytes) -> "MotorSequencePayloadTemplate_5":
         offset = 0
-        cmd_id, num_steps = struct.unpack_from("<IB", data, offset)
-        offset += struct.calcsize("<IB")
+        cmd_id, num_steps = struct.unpack_from("<IB3x", data, offset)
+        offset += struct.calcsize("<IB3x")
         steps = []
         for _ in range(5):
             sub_size = MotorSubCmd.WIRE_SIZE
@@ -178,21 +178,21 @@ class MotorSequencePayloadTemplate_5:
 @dataclass
 class MotorStatusPayload:
     """Internal IPC: Periodic RPM and activity update from MotorService."""
-    WIRE_SIZE = 7
+    WIRE_SIZE = 8
     cmd_id: int
     speed_rpm: int
     is_active: bool
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<Ih?", self.cmd_id, self.speed_rpm, self.is_active))
+        data.extend(struct.pack("<Ih?1x", self.cmd_id, self.speed_rpm, self.is_active))
         return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "MotorStatusPayload":
         offset = 0
-        cmd_id, speed_rpm, is_active = struct.unpack_from("<Ih?", data, offset)
-        offset += struct.calcsize("<Ih?")
+        cmd_id, speed_rpm, is_active = struct.unpack_from("<Ih?1x", data, offset)
+        offset += struct.calcsize("<Ih?1x")
         return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, is_active=is_active)
 
 @dataclass
@@ -255,7 +255,7 @@ class PowerRequestPayload:
 @dataclass
 class PowerPayload:
     """Power-model snapshot sent in response to a PowerRequest. Models a simple battery with internal resistance drain."""
-    WIRE_SIZE = 13
+    WIRE_SIZE = 16
     cmd_id: int
     voltage_v: float
     current_a: float
@@ -263,14 +263,14 @@ class PowerPayload:
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<IffB", self.cmd_id, self.voltage_v, self.current_a, self.state_of_charge))
+        data.extend(struct.pack("<IffB3x", self.cmd_id, self.voltage_v, self.current_a, self.state_of_charge))
         return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "PowerPayload":
         offset = 0
-        cmd_id, voltage_v, current_a, state_of_charge = struct.unpack_from("<IffB", data, offset)
-        offset += struct.calcsize("<IffB")
+        cmd_id, voltage_v, current_a, state_of_charge = struct.unpack_from("<IffB3x", data, offset)
+        offset += struct.calcsize("<IffB3x")
         return cls(cmd_id=cmd_id, voltage_v=voltage_v, current_a=current_a, state_of_charge=state_of_charge)
 
 @dataclass
@@ -466,7 +466,7 @@ class ManeuverNode:
 @dataclass
 class AutoDriveCommandTemplate_8:
     """High level autonomous driving route and configuration."""
-    WIRE_SIZE = 171
+    WIRE_SIZE = 180
     route_name: bytes
     mode: DriveMode
     p_gain: float
@@ -477,7 +477,7 @@ class AutoDriveCommandTemplate_8:
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<32sBf?", self.route_name, self.mode, self.p_gain, self.use_environment_tuning))
+        data.extend(struct.pack("<32sB3xf?3x", self.route_name, self.mode, self.p_gain, self.use_environment_tuning))
         for item in self.route_transform:
             if not hasattr(item, 'pack_wire'):
                 if isinstance(item, tuple):
@@ -487,7 +487,7 @@ class AutoDriveCommandTemplate_8:
                 else:
                     item = Vector3(item)
             data.extend(item.pack_wire())
-        data.extend(struct.pack("<B", self.num_nodes))
+        data.extend(struct.pack("<B3x", self.num_nodes))
         for item in self.route:
             if not hasattr(item, 'pack_wire'):
                 if isinstance(item, tuple):
@@ -502,16 +502,16 @@ class AutoDriveCommandTemplate_8:
     @classmethod
     def unpack_wire(cls, data: bytes) -> "AutoDriveCommandTemplate_8":
         offset = 0
-        route_name, mode, p_gain, use_environment_tuning = struct.unpack_from("<32sBf?", data, offset)
-        offset += struct.calcsize("<32sBf?")
+        route_name, mode, p_gain, use_environment_tuning = struct.unpack_from("<32sB3xf?3x", data, offset)
+        offset += struct.calcsize("<32sB3xf?3x")
         route_transform = []
         for _ in range(3):
             sub_size = Vector3.WIRE_SIZE
             item = Vector3.unpack_wire(data[offset:offset+sub_size])
             route_transform.append(item)
             offset += sub_size
-        num_nodes = struct.unpack_from("<B", data, offset)[0]
-        offset += struct.calcsize("<B")
+        num_nodes = struct.unpack_from("<B3x", data, offset)[0]
+        offset += struct.calcsize("<B3x")
         route = []
         for _ in range(8):
             sub_size = ManeuverNode.WIRE_SIZE
@@ -562,7 +562,7 @@ class EnvId:
 @dataclass
 class AutoDriveStatusTemplate_8__4:
     """Status and efficiency report from the AutonomousService."""
-    WIRE_SIZE = 152
+    WIRE_SIZE = 156
     cmd_id: int
     current_node_idx: int
     route_complete: bool
@@ -573,7 +573,7 @@ class AutoDriveStatusTemplate_8__4:
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<IB?B", self.cmd_id, self.current_node_idx, self.route_complete, self.num_stats))
+        data.extend(struct.pack("<IB?B1x", self.cmd_id, self.current_node_idx, self.route_complete, self.num_stats))
         for item in self.node_stats:
             if not hasattr(item, 'pack_wire'):
                 if isinstance(item, tuple):
@@ -583,7 +583,7 @@ class AutoDriveStatusTemplate_8__4:
                 else:
                     item = ManeuverStats(item)
             data.extend(item.pack_wire())
-        data.extend(struct.pack("<B", self.num_environments_used))
+        data.extend(struct.pack("<B3x", self.num_environments_used))
         for item in self.environment_ids:
             if not hasattr(item, 'pack_wire'):
                 if isinstance(item, tuple):
@@ -598,16 +598,16 @@ class AutoDriveStatusTemplate_8__4:
     @classmethod
     def unpack_wire(cls, data: bytes) -> "AutoDriveStatusTemplate_8__4":
         offset = 0
-        cmd_id, current_node_idx, route_complete, num_stats = struct.unpack_from("<IB?B", data, offset)
-        offset += struct.calcsize("<IB?B")
+        cmd_id, current_node_idx, route_complete, num_stats = struct.unpack_from("<IB?B1x", data, offset)
+        offset += struct.calcsize("<IB?B1x")
         node_stats = []
         for _ in range(8):
             sub_size = ManeuverStats.WIRE_SIZE
             item = ManeuverStats.unpack_wire(data[offset:offset+sub_size])
             node_stats.append(item)
             offset += sub_size
-        num_environments_used = struct.unpack_from("<B", data, offset)[0]
-        offset += struct.calcsize("<B")
+        num_environments_used = struct.unpack_from("<B3x", data, offset)[0]
+        offset += struct.calcsize("<B3x")
         environment_ids = []
         for _ in range(4):
             sub_size = EnvId.WIRE_SIZE
@@ -688,22 +688,22 @@ MESSAGE_BY_ID = {
 
 PAYLOAD_SIZE_BY_ID = {
     MsgId.Log: 288,
-    MsgId.PhysicsTick: 10,
+    MsgId.PhysicsTick: 12,
     MsgId.StateRequest: 1,
     MsgId.StateData: 1,
-    MsgId.MotorSequence: 35,
-    MsgId.MotorStatus: 7,
+    MsgId.MotorSequence: 48,
+    MsgId.MotorStatus: 8,
     MsgId.KinematicsRequest: 1,
     MsgId.KinematicsData: 16,
     MsgId.PowerRequest: 1,
-    MsgId.PowerData: 13,
+    MsgId.PowerData: 16,
     MsgId.ThermalRequest: 1,
     MsgId.ThermalData: 8,
     MsgId.EnvironmentAck: 4,
     MsgId.EnvironmentRequest: 8,
     MsgId.EnvironmentData: 32,
-    MsgId.AutoDriveCommand: 171,
-    MsgId.AutoDriveStatus: 152,
+    MsgId.AutoDriveCommand: 180,
+    MsgId.AutoDriveStatus: 156,
     MsgId.InternalEnvRequest: 8,
     MsgId.InternalEnvData: 16,
 }

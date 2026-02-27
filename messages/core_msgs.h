@@ -3,7 +3,6 @@
 
 #include "msg_base.h"
 
-#pragma pack(push, 1)
 
 struct DOC_DESC(
     "Unidirectional log/trace message. Emitted by any component at any time; "
@@ -32,8 +31,6 @@ struct DOC_DESC(
   int16_t speed_rpm;
   uint32_t dt_us;
 };
-
-#pragma pack(pop)
 
 template <>
 struct MessageTraits<MsgId::Log> {

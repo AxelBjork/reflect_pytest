@@ -162,7 +162,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 **Direction:** `Internal`<br>
 **Publishes:** `StateService`<br>
 **Subscribes:** `MotorService`, `KinematicsService`, `PowerService`, `ThermalService`, `AutonomousService`<br>
-**Wire size:** 10 bytes
+**Wire size:** 12 bytes
 
 <table>
   <thead>
@@ -188,7 +188,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>uint32_t</td>
       <td>int</td>
       <td>4</td>
-      <td>6</td>
+      <td>8</td>
     </tr>
   </tbody>
 </table>
@@ -255,7 +255,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 **Direction:** `Bidirectional`<br>
 **Publishes:** `AutonomousService`<br>
 **Subscribes:** `MotorService`<br>
-**Wire size:** 35 bytes
+**Wire size:** 48 bytes
 
 <table>
   <thead>
@@ -280,15 +280,15 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>steps</td>
       <td>std::array<MotorSubCmd, 5></td>
       <td>Any</td>
-      <td>30</td>
-      <td>5</td>
+      <td>40</td>
+      <td>8</td>
     </tr>
   </tbody>
 </table>
 
 #### Sub-struct: `std::array<MotorSubCmd, 5>`
 
-**Wire size:** 30 bytes
+**Wire size:** 40 bytes
 
 <table>
   <thead>
@@ -299,7 +299,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>_M_elems</td>
       <td>MotorSubCmd[5]</td>
       <td>bytes</td>
-      <td>30</td>
+      <td>40</td>
       <td>0</td>
     </tr>
   </tbody>
@@ -309,7 +309,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > One timed motor command step, embedded in MotorSequencePayload.
 
-**Wire size:** 6 bytes
+**Wire size:** 8 bytes
 
 <table>
   <thead>
@@ -328,7 +328,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>uint32_t</td>
       <td>int</td>
       <td>4</td>
-      <td>2</td>
+      <td>4</td>
     </tr>
   </tbody>
 </table>
@@ -343,7 +343,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 **Direction:** `Internal`<br>
 **Publishes:** `MotorService`<br>
 **Subscribes:** `KinematicsService`, `PowerService`, `StateService`<br>
-**Wire size:** 7 bytes
+**Wire size:** 8 bytes
 
 <table>
   <thead>
@@ -486,7 +486,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 **Direction:** `Bidirectional`<br>
 **Publishes:** `PowerService`<br>
 **Subscribes:** `AutonomousService`<br>
-**Wire size:** 13 bytes
+**Wire size:** 16 bytes
 
 <table>
   <thead>
@@ -782,7 +782,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Inbound`<br>
 **Subscribes:** `AutonomousService`<br>
-**Wire size:** 171 bytes
+**Wire size:** 180 bytes
 
 <table>
   <thead>
@@ -808,35 +808,35 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>float</td>
       <td>float</td>
       <td>4</td>
-      <td>33</td>
+      <td>36</td>
     </tr>
     <tr>
       <td>use_environment_tuning</td>
       <td>bool</td>
       <td>bool</td>
       <td>1</td>
-      <td>37</td>
+      <td>40</td>
     </tr>
     <tr>
       <td>route_transform</td>
       <td>std::array<Vector3, 3></td>
       <td>Any</td>
       <td>36</td>
-      <td>38</td>
+      <td>44</td>
     </tr>
     <tr>
       <td>num_nodes</td>
       <td>uint8_t</td>
       <td>int</td>
       <td>1</td>
-      <td>74</td>
+      <td>80</td>
     </tr>
     <tr>
       <td>route</td>
       <td>std::array<ManeuverNode, 8></td>
       <td>Any</td>
       <td>96</td>
-      <td>75</td>
+      <td>84</td>
     </tr>
   </tbody>
 </table>
@@ -986,7 +986,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Outbound`<br>
 **Publishes:** `AutonomousService`<br>
-**Wire size:** 152 bytes
+**Wire size:** 156 bytes
 
 <table>
   <thead>
@@ -1026,21 +1026,21 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>std::array<ManeuverStats, 8></td>
       <td>Any</td>
       <td>128</td>
-      <td>7</td>
+      <td>8</td>
     </tr>
     <tr>
       <td>num_environments_used</td>
       <td>uint8_t</td>
       <td>int</td>
       <td>1</td>
-      <td>135</td>
+      <td>136</td>
     </tr>
     <tr>
       <td>environment_ids</td>
       <td>std::array<EnvId, 4></td>
       <td>Any</td>
       <td>16</td>
-      <td>136</td>
+      <td>140</td>
     </tr>
   </tbody>
 </table>

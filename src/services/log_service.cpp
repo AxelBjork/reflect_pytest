@@ -1,7 +1,6 @@
 #include "services/log_service.h"
 
 #include <cstdio>
-#include <cstring>
 
 #include "component_logger.h"
 

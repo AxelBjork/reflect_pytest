@@ -5,8 +5,6 @@
 
 #include "msg_base.h"
 
-#pragma pack(push, 1)
-
 struct DOC_DESC("A 2D coordinate.") Point2D {
   float x;
   float y;
@@ -104,7 +102,6 @@ struct InternalEnvDataPayload {
   std::shared_ptr<const EnvironmentPayload> ptr;
 };
 
-#pragma pack(pop)
 
 template <>
 struct MessageTraits<MsgId::EnvironmentAck> {

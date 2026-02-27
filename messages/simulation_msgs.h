@@ -4,7 +4,6 @@
 
 #include "msg_base.h"
 
-#pragma pack(push, 1)
 
 struct DOC_DESC("One timed motor command step, embedded in MotorSequencePayload.") MotorSubCmd {
   int16_t speed_rpm;
@@ -75,8 +74,6 @@ struct DOC_DESC("Internal IPC: Periodic RPM and activity update from MotorServic
   int16_t speed_rpm;
   bool is_active;
 };
-
-#pragma pack(pop)
 
 template <>
 struct MessageTraits<MsgId::MotorSequence> {

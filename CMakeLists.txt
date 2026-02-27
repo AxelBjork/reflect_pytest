@@ -31,6 +31,7 @@ add_executable(generate_bindings generator/generate_bindings.cpp)
 target_include_directories(generate_bindings PRIVATE generator src messages)
 target_compile_options(generate_bindings PRIVATE -freflection)
 target_compile_definitions(generate_bindings PRIVATE REFLECT_DOCS)
+set_target_properties(generate_bindings PROPERTIES EXPORT_COMPILE_COMMANDS OFF)
 
 add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/tests/python/reflect_pytest/generated.py
@@ -49,6 +50,7 @@ add_executable(generate_docs generator/generate_docs.cpp)
 target_include_directories(generate_docs PRIVATE generator src messages)
 target_compile_options(generate_docs PRIVATE -freflection)
 target_compile_definitions(generate_docs PRIVATE REFLECT_DOCS)
+set_target_properties(generate_docs PROPERTIES EXPORT_COMPILE_COMMANDS OFF)
 
 add_custom_command(
     OUTPUT ${CMAKE_SOURCE_DIR}/doc/README.md ${CMAKE_SOURCE_DIR}/doc/ipc_flow.dot ${CMAKE_SOURCE_DIR}/doc/ipc_flow.svg
