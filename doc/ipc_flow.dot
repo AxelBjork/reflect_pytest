@@ -64,7 +64,7 @@ digraph IPC {
     ];
     ThermalService [
       fillcolor="#0369A1",
-      label=<<B><FONT POINT-SIZE="30">ThermalService</FONT></B><BR/><FONT POINT-SIZE="24">Thermal Service</FONT>>
+      label=<<B><FONT POINT-SIZE="30">ThermalService</FONT></B><BR/><FONT POINT-SIZE="24">Simulates basic motor and battery<BR/>temperature dynamics.</FONT>>
     ];
     EnvironmentService [
       fillcolor="#0369A1",
@@ -72,7 +72,7 @@ digraph IPC {
     ];
     AutonomousService [
       fillcolor="#0369A1",
-      label=<<B><FONT POINT-SIZE="30">AutonomousService</FONT></B><BR/><FONT POINT-SIZE="24">High level autonomous driving service.</FONT>>
+      label=<<B><FONT POINT-SIZE="30">AutonomousService</FONT></B><BR/><FONT POINT-SIZE="24">High-level autonomous driving service<BR/>executing a waypoint (node) route.</FONT>>
     ];
     LogService [
       fillcolor="#0369A1",
@@ -80,7 +80,7 @@ digraph IPC {
     ];
     UdpBridge [
       fillcolor="#0F766E",
-      label=<<B><FONT POINT-SIZE="38">UdpBridge</FONT></B><BR/><FONT POINT-SIZE="26">Message Distribution Hub</FONT>>
+      label=<<B><FONT POINT-SIZE="38">UdpBridge</FONT></B><BR/><FONT POINT-SIZE="26">Stateful bridge that relays IPC messages<BR/>between the internal MessageBus and<BR/>external UDP clients.</FONT>>
     ];
   }
 

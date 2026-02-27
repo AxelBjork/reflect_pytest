@@ -68,11 +68,11 @@ $$ x = \int v \, dt $$
 
 > Models a simple battery pack dynamically responding to motor load.
 
-The simulation calculates the current drawn by the motor based on its speed, then applies Ohm's law over the internal resistance to calculate the instantaneous voltage drop. The state of charge (SOC) is linearly interpolated between the maximum and minimum voltage limits:
+The simulation estimates motor current draw from speed using a non-linear power-law curve, then applies Ohm's law over the internal resistance to calculate the per-tick voltage drop. The state of charge (SOC) is linearly interpolated between the maximum and minimum voltage limits.
 
-$$ I = |\text{RPM}| \times 0.005 \text{ (A)} $$
+$$ I = I_{idle} + k\,|\mathrm{RPM}|^{p} \quad (\mathrm{A}) $$
 
-$$ V \mathrel{-}= I \times R_{int} \times dt $$
+$$ V \mathrel{-}= I\,R_{int}\,\Delta t $$
 
 $$ SOC = \frac{V - V_{min}}{V_{max} - V_{min}} \times 100 $$
 
@@ -84,7 +84,22 @@ This component tracks the system state and generates the 100Hz `PhysicsTick` hea
 
 ### `ThermalService`
 
-> Thermal Service
+> Simulates basic motor and battery temperature dynamics.
+
+On each physics tick, the service updates motor and battery temperatures using a simple first-order heat balance: a speed-proportional heat generation term minus a linear cooling term to ambient. Ambient temperature is updated from EnvironmentData. A ThermalRequest publishes the latest temperatures.
+
+Motor model:
+$$ \dot{T}_m = q_m - c_m \,(T_m - T_a) $$
+$$ q_m = 0.005\,|\mathrm{RPM}|,\quad c_m = 0.05 $$
+
+Battery model:
+$$ \dot{T}_b = q_b - c_b \,(T_b - T_a) $$
+$$ q_b = 0.002\,|\mathrm{RPM}|,\quad c_b = 0.02 $$
+
+Discrete update per tick (for each body):
+$$ T \leftarrow T + \bigl(\dot{T}\bigr)\,\Delta t $$
+
+Where $T_a$ is ambient temperature from EnvironmentData, and $\Delta t$ is the physics timestep in seconds.
 
 ### `EnvironmentService`
 
@@ -94,7 +109,9 @@ It maintains a spatial cache of environmental regions (temperature, incline, fri
 
 ### `AutonomousService`
 
-> High level autonomous driving service.
+> High-level autonomous driving service executing a waypoint (node) route.
+
+The service accepts an AutoDriveCommand containing a list of ManeuverNodes (1D x targets). While a route is active, it periodically requests Kinematics and Power data on each physics tick, decides when the current node has been reached, and publishes MotorSequence commands to drive toward the node.
 
 ### `LogService`
 
@@ -672,7 +689,7 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 **Direction:** `Inbound`<br>
 **Subscribes:** `ThermalService`, `EnvironmentService`<br>
-**Wire size:** 32 bytes
+**Wire size:** 36 bytes
 
 <table>
   <thead>
@@ -713,6 +730,13 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>float</td>
       <td>4</td>
       <td>28</td>
+    </tr>
+    <tr>
+      <td>max_speed_rpm</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>32</td>
     </tr>
   </tbody>
 </table>
@@ -933,18 +957,11 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
       <td>0</td>
     </tr>
     <tr>
-      <td>speed_limit_rpm</td>
-      <td>int16_t</td>
-      <td>int</td>
-      <td>2</td>
-      <td>8</td>
-    </tr>
-    <tr>
       <td>timeout_ms</td>
       <td>uint16_t</td>
       <td>int</td>
       <td>2</td>
-      <td>10</td>
+      <td>8</td>
     </tr>
   </tbody>
 </table>

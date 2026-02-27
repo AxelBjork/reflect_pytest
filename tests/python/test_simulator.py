@@ -225,21 +225,49 @@ def test_cmd_id_echoed_in_kinematics(udp):
 
 # ── Tests: power model ───────────────────────────────────────────────────────
 
-
-def test_current_proportional_to_rpm(udp):
-    """Current must equal |rpm| * K_RPM_TO_AMPS while executing."""
-    send_sequence(udp, cmd_id=20, steps=[(400, 200_000)])
+def test_current_scales_superlinearly_with_rpm(udp):
+    """
+    Current should increase superlinearly with RPM (power-law exponent > 1).
+    Uses a single sequence with 3 steps so we can sample idle, base, and 2x base.
+    """
+    step_us = 30_000  # long enough to sample mid-step
+    send_sequence(
+        udp,
+        cmd_id=20,
+        steps=[
+            (0, step_us),
+            (300, step_us),
+            (600, step_us),
+        ],
+    )
     wait_executing(udp)
-    p = query_power(udp)
-    assert abs(p.current_a - 400 * K_RPM_TO_AMPS) < 0.05
 
+    # Sample mid-step for each segment.
+    time.sleep(step_us / 2 / 1e6)
+    i_idle = query_power(udp).current_a
 
-def test_current_zero_at_rest(udp):
+    time.sleep(step_us / 1e6)
+    i1 = query_power(udp).current_a
+
+    time.sleep(step_us / 1e6)
+    i2 = query_power(udp).current_a
+
+    assert i2 > i1
+
+    # Compare “above-idle” components to avoid baseline skew.
+    denom = max(i1 - i_idle, 1e-3)
+    ratio = (i2 - i_idle) / denom
+
+    # For a power law with p ~ 1.5, doubling RPM gives ~2.83x (above idle).
+    # Use a looser bound to keep the test robust.
+    assert ratio > 2.5
+
+def test_current_low_at_rest(udp):
     """No current when idle."""
     send_sequence(udp, cmd_id=21, steps=[(200, 20_000)])
     wait_for_sequence(udp, cmd_id=21, duration_us=20_000)
     p = query_power(udp)
-    assert p.current_a == 0.0
+    assert p.current_a < 0.15
 
 
 def test_voltage_decreases_under_load(udp):

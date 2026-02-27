@@ -68,7 +68,5 @@ int main() {
 
   hb_cv.notify_all();
   heartbeat.join();
-
-  std::printf("[sil_app] shutting down\n");
   return 0;
 }

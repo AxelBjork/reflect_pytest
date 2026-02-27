@@ -11,20 +11,23 @@
 
 namespace sil {
 
-inline constexpr float K_RPM_TO_AMPS = 0.005f;
+inline constexpr float I_IDLE_A = 0.1f;
+inline constexpr float K_RPM_POW_TO_AMPS = 2.0e-4f; // A / RPM^p (tune)
+inline constexpr float RPM_EXP_P = 1.5f;            // p (tune)
 inline constexpr float R_INT_OHM = 0.5f;
 inline constexpr float V_MAX = 12.6f;
 inline constexpr float V_MIN = 10.5f;
 
 class DOC_DESC(
     "Models a simple battery pack dynamically responding to motor load.\n\n"
-    "The simulation calculates the current drawn by the motor based on its speed, then applies "
-    "Ohm's law over the internal resistance to calculate the instantaneous voltage drop. "
+    "The simulation estimates motor current draw from speed using a non-linear power-law curve, "
+    "then applies Ohm's law over the internal resistance to calculate the per-tick voltage drop. "
     "The state of charge (SOC) is linearly interpolated between the maximum and minimum voltage "
-    "limits:\n\n"
-    "$$ I = |\\text{RPM}| \\times 0.005 \\text{ (A)} $$\n\n"
-    "$$ V \\mathrel{-}= I \\times R_{int} \\times dt $$\n\n"
-    "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$") PowerService {
+    "limits.\n\n"
+    "$$ I = I_{idle} + k\\,|\\mathrm{RPM}|^{p} \\quad (\\mathrm{A}) $$\n\n"
+    "$$ V \\mathrel{-}= I\\,R_{int}\\,\\Delta t $$\n\n"
+    "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$")
+PowerService {
  public:
   using Subscribes = ipc::MsgList<MsgId::PhysicsTick, MsgId::PowerRequest, MsgId::MotorStatus>;
   using Publishes = ipc::MsgList<MsgId::PowerData>;
@@ -36,7 +39,8 @@ class DOC_DESC(
   void on_message(const PhysicsTickPayload& tick) {
     std::lock_guard lk{mu_};
     float dt_s = tick.dt_us / 1e6f;
-    current_a_ = std::abs(tick.speed_rpm) * K_RPM_TO_AMPS;
+    float rpm_abs = std::abs(static_cast<float>(tick.speed_rpm));
+    current_a_ = I_IDLE_A + K_RPM_POW_TO_AMPS * std::pow(rpm_abs, RPM_EXP_P);
     float dv = current_a_ * R_INT_OHM * dt_s;
     voltage_v_ = std::max(V_MIN, voltage_v_ - dv);
     soc_ = static_cast<uint8_t>(

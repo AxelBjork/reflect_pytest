@@ -9,10 +9,10 @@
 
 namespace doc {
 struct Desc {
-  char text[512]{};
+  char text[1024]{};
   constexpr Desc(const char* t) {
     int i = 0;
-    while (t[i] != '\0' && i < 511) {
+    while (t[i] != '\0' && i < 1023) {
       text[i] = t[i];
       i++;
     }

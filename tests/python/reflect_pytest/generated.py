@@ -393,18 +393,19 @@ class BoundingBox2D:
 @dataclass
 class EnvironmentPayload:
     """Environmental conditions delivered to the application from the outside world."""
-    WIRE_SIZE = 32
+    WIRE_SIZE = 36
     region_id: int
     bounds: BoundingBox2D
     ambient_temp_c: float
     incline_percent: float
     surface_friction: float
+    max_speed_rpm: float
 
     def pack_wire(self) -> bytes:
         data = bytearray()
         data.extend(struct.pack("<I", self.region_id))
         data.extend(self.bounds.pack_wire())
-        data.extend(struct.pack("<fff", self.ambient_temp_c, self.incline_percent, self.surface_friction))
+        data.extend(struct.pack("<ffff", self.ambient_temp_c, self.incline_percent, self.surface_friction, self.max_speed_rpm))
         return bytes(data)
 
     @classmethod
@@ -415,9 +416,9 @@ class EnvironmentPayload:
         sub_size = BoundingBox2D.WIRE_SIZE
         bounds = BoundingBox2D.unpack_wire(data[offset:offset+sub_size])
         offset += sub_size
-        ambient_temp_c, incline_percent, surface_friction = struct.unpack_from("<fff", data, offset)
-        offset += struct.calcsize("<fff")
-        return cls(region_id=region_id, bounds=bounds, ambient_temp_c=ambient_temp_c, incline_percent=incline_percent, surface_friction=surface_friction)
+        ambient_temp_c, incline_percent, surface_friction, max_speed_rpm = struct.unpack_from("<ffff", data, offset)
+        offset += struct.calcsize("<ffff")
+        return cls(region_id=region_id, bounds=bounds, ambient_temp_c=ambient_temp_c, incline_percent=incline_percent, surface_friction=surface_friction, max_speed_rpm=max_speed_rpm)
 
 @dataclass
 class Vector3:
@@ -444,13 +445,12 @@ class ManeuverNode:
     """A single target maneuver point."""
     WIRE_SIZE = 12
     target_pos: Point2D
-    speed_limit_rpm: int
     timeout_ms: int
 
     def pack_wire(self) -> bytes:
         data = bytearray()
         data.extend(self.target_pos.pack_wire())
-        data.extend(struct.pack("<hH", self.speed_limit_rpm, self.timeout_ms))
+        data.extend(struct.pack("<H2x", self.timeout_ms))
         return bytes(data)
 
     @classmethod
@@ -459,9 +459,9 @@ class ManeuverNode:
         sub_size = Point2D.WIRE_SIZE
         target_pos = Point2D.unpack_wire(data[offset:offset+sub_size])
         offset += sub_size
-        speed_limit_rpm, timeout_ms = struct.unpack_from("<hH", data, offset)
-        offset += struct.calcsize("<hH")
-        return cls(target_pos=target_pos, speed_limit_rpm=speed_limit_rpm, timeout_ms=timeout_ms)
+        timeout_ms = struct.unpack_from("<H2x", data, offset)[0]
+        offset += struct.calcsize("<H2x")
+        return cls(target_pos=target_pos, timeout_ms=timeout_ms)
 
 @dataclass
 class AutoDriveCommandTemplate_8:
@@ -701,7 +701,7 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.ThermalData: 8,
     MsgId.EnvironmentAck: 4,
     MsgId.EnvironmentRequest: 8,
-    MsgId.EnvironmentData: 32,
+    MsgId.EnvironmentData: 36,
     MsgId.AutoDriveCommand: 180,
     MsgId.AutoDriveStatus: 156,
     MsgId.InternalEnvRequest: 8,

@@ -41,6 +41,7 @@ struct DOC_DESC("Environmental conditions delivered to the application from the 
   float ambient_temp_c;
   float incline_percent;
   float surface_friction;
+  float max_speed_rpm;
 };
 
 enum class DOC_DESC("Control strategy for the autonomous service.") DriveMode : uint8_t {
@@ -51,7 +52,6 @@ enum class DOC_DESC("Control strategy for the autonomous service.") DriveMode : 
 
 struct DOC_DESC("A single target maneuver point.") ManeuverNode {
   Point2D target_pos;
-  int16_t speed_limit_rpm;
   uint16_t timeout_ms;
 };
 
@@ -101,7 +101,6 @@ struct InternalEnvRequestPayload {
 struct InternalEnvDataPayload {
   std::shared_ptr<const EnvironmentPayload> ptr;
 };
-
 
 template <>
 struct MessageTraits<MsgId::EnvironmentAck> {

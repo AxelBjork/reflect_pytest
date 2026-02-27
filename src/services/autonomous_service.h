@@ -14,7 +14,12 @@
 
 namespace sil {
 
-class DOC_DESC("High level autonomous driving service.") AutonomousService {
+class DOC_DESC(
+    "High-level autonomous driving service executing a waypoint (node) route.\n\n"
+    "The service accepts an AutoDriveCommand containing a list of ManeuverNodes (1D x targets). "
+    "While a route is active, it periodically requests Kinematics and Power data on each physics "
+    "tick, decides when the current node has been reached, and publishes MotorSequence commands "
+    "to drive toward the node.") AutonomousService {
  public:
   using Subscribes = ipc::MsgList<MsgId::AutoDriveCommand, MsgId::KinematicsData,
                                   MsgId::PhysicsTick, MsgId::PowerData, MsgId::InternalEnvData>;
@@ -62,6 +67,11 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
         used_envs_.push_back(env.ptr->region_id);
         status_.environment_ids[status_.num_environments_used++].id = env.ptr->region_id;
       }
+    }
+
+    // Proactive update: If we are mid-route, update the motor sequence for the new environment
+    if (route_active_) {
+      publish_motor_sequence_for_current_node();
     }
   }
 
@@ -129,6 +139,9 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
         seq.num_steps = 1;
         seq.steps[0] = {0, 0};  // Stop
         bus_.publish<MsgId::MotorSequence>(seq);
+      } else {
+        // Start next node immediately
+        publish_motor_sequence_for_current_node();
       }
     }
     last_pos_m_ = kin.position_m;
@@ -146,15 +159,36 @@ class DOC_DESC("High level autonomous driving service.") AutonomousService {
   void publish_motor_sequence_for_current_node() {
     const auto& node = cmd_.route[current_node_idx_];
 
-    int16_t speed = node.speed_limit_rpm;
+    float target_speed = 0.0f;
+    if (current_env_ptr_) {
+      target_speed = current_env_ptr_->max_speed_rpm;
+    } else {
+      target_speed = 1000.0f;  // Default if no environment data yet
+    }
+
+    // Apply DriveMode scaling
+    switch (cmd_.mode) {
+      case DriveMode::Eco:
+        target_speed *= 0.75f;
+        break;
+      case DriveMode::Performance:
+        target_speed *= 1.10f;
+        break;
+      case DriveMode::ManualTuning:
+        target_speed *= cmd_.p_gain;
+        break;
+    }
+
     // Simple environment tuning: half speed on steep inclines (>5%)
     if (cmd_.use_environment_tuning && current_env_ptr_) {
       if (std::abs(current_env_ptr_->incline_percent) > 5.0f) {
-        speed /= 2;
+        target_speed /= 2.0f;
         logger_.info("Steep incline (%.1f%%) detected - reducing speed to %d RPM",
-                     current_env_ptr_->incline_percent, speed);
+                     current_env_ptr_->incline_percent, static_cast<int>(target_speed));
       }
     }
+
+    int16_t speed = static_cast<int16_t>(target_speed);
 
     MotorSequencePayload seq{};
     seq.cmd_id = 999;

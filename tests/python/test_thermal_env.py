@@ -43,7 +43,7 @@ def query_thermal(udp) -> ThermalPayload:
     udp.send_msg(MsgId.ThermalRequest, ThermalRequestPayload(reserved=0))
     return udp.recv_msg(expected_id=MsgId.ThermalData)
 
-def set_environment(udp, ambient_temp: float, incline: float, friction: float, region_id: int = 0):
+def set_environment(udp, ambient_temp: float, incline: float, friction: float, max_speed_rpm: int, region_id: int = 0):
     drain_socket(udp)
     # EnvironmentData is inbound (sent by Python, consumed by App)
     env = EnvironmentPayload(
@@ -51,7 +51,8 @@ def set_environment(udp, ambient_temp: float, incline: float, friction: float, r
         bounds=BoundingBox2D(min_pt=Point2D(x=0,y=0), max_pt=Point2D(x=0,y=0)), 
         ambient_temp_c=ambient_temp,
         incline_percent=incline,
-        surface_friction=friction
+        surface_friction=friction,
+        max_speed_rpm=max_speed_rpm
     )
     udp.send_msg(MsgId.EnvironmentData, env)
     
@@ -77,14 +78,15 @@ def wait_for_sequence(udp, cmd_id: int, duration_us: int) -> None:
 
 def test_environment_override(udp):
     """Test that setting environment conditions is acknowledged by the application."""
-    resp = set_environment(udp, ambient_temp=30.5, incline=5.0, friction=0.8)
+    resp = set_environment(udp, ambient_temp=30.5, incline=5.0, friction=0.8, max_speed_rpm=100)
     assert resp.ambient_temp_c == 30.5
     assert resp.incline_percent == 5.0
     assert resp.surface_friction == pytest.approx(0.8)
+    assert resp.max_speed_rpm == 100
     
 def test_thermal_increases_under_load(udp):
     """Motor and battery temps should increase when driving."""
-    set_environment(udp, ambient_temp=20.0, incline=0.0, friction=1.0)
+    set_environment(udp, ambient_temp=20.0, incline=0.0, friction=1.0, max_speed_rpm=100)
     
     initial_thermal = query_thermal(udp)
     
@@ -99,18 +101,18 @@ def test_thermal_increases_under_load(udp):
 
 def test_thermal_cooldown(udp):
     """Temperatures should drop back towards ambient over time when idle."""
-    set_environment(udp, ambient_temp=10.0, incline=0.0, friction=1.0)
+    set_environment(udp, ambient_temp=10.0, incline=0.0, friction=1.0, max_speed_rpm=100)
     
     # Heat it up significantly
-    send_sequence(udp, cmd_id=102, steps=[(800, 500_000)])
-    wait_for_sequence(udp, cmd_id=102, duration_us=500_000)
+    send_sequence(udp, cmd_id=102, steps=[(800, 50_000)])
+    wait_for_sequence(udp, cmd_id=102, duration_us=50_000)
     
     hot_thermal = query_thermal(udp)
     assert hot_thermal.motor_temp_c > 10.0
     
     # Let it cool down with a zero-rpm sequence to trigger PhysicsTicks
-    send_sequence(udp, cmd_id=103, steps=[(0, 500_000)])
-    wait_for_sequence(udp, cmd_id=103, duration_us=500_000)
+    send_sequence(udp, cmd_id=103, steps=[(0, 50_000)])
+    wait_for_sequence(udp, cmd_id=103, duration_us=50_000)
     
     cool_thermal = query_thermal(udp)
     assert cool_thermal.motor_temp_c < hot_thermal.motor_temp_c

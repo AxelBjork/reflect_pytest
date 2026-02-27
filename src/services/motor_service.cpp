@@ -13,6 +13,10 @@ void MotorService::on_message(const MotorSequencePayload& cmd) {
   std::lock_guard lk{mu_};
   current_cmd_ = cmd;
   current_cmd_.num_steps = std::min(current_cmd_.num_steps, kMaxSubCmds);
+  for (uint8_t i = 0; i < current_cmd_.num_steps; ++i) {
+    current_cmd_.steps[i].speed_rpm = std::clamp(
+        current_cmd_.steps[i].speed_rpm, static_cast<int16_t>(-6000), static_cast<int16_t>(6000));
+  }
   current_step_idx_ = 0;
   bool start_immediately = (current_cmd_.num_steps > 0 && current_cmd_.steps[0].duration_us > 0);
 

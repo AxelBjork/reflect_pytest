@@ -707,20 +707,22 @@ void emit_graphviz_flow_dot(std::ostream& os) {
       constexpr auto R = ^^Comp;
       const std::string cname = cpp_type_name_str<Comp>();
 
+      // Use DOC_DESC for all components
+      std::string desc_text = wrap_words(first_sentence(get_desc<R>().text), 40);
+      if (desc_text.empty()) desc_text = cname;
+
       if constexpr (std::is_same_v<Comp, ipc::UdpBridge>) {
         os << "    " << ub_id << " [\n"
-           << "      fillcolor=\"#0F766E\",\n"
-           << "      label=<<B><FONT POINT-SIZE=\"38\">" << html_escape(cname)
-           << "</FONT></B><BR/><FONT POINT-SIZE=\"26\">Message Distribution Hub</FONT>>\n"
-           << "    ];\n";
+          << "      fillcolor=\"#0F766E\",\n"
+          << "      label=<<B><FONT POINT-SIZE=\"38\">" << html_escape(cname)
+          << "</FONT></B><BR/><FONT POINT-SIZE=\"26\">" << html_escape(desc_text) << "</FONT>>\n"
+          << "    ];\n";
       } else {
-        std::string desc_text = wrap_words(first_sentence(get_desc<R>().text), 40);
-        if (desc_text.empty()) desc_text = cname;
         os << "    " << dot_id(cname) << " [\n"
-           << "      fillcolor=\"#0369A1\",\n"
-           << "      label=<<B><FONT POINT-SIZE=\"30\">" << html_escape(cname)
-           << "</FONT></B><BR/><FONT POINT-SIZE=\"24\">" << html_escape(desc_text) << "</FONT>>\n"
-           << "    ];\n";
+          << "      fillcolor=\"#0369A1\",\n"
+          << "      label=<<B><FONT POINT-SIZE=\"30\">" << html_escape(cname)
+          << "</FONT></B><BR/><FONT POINT-SIZE=\"24\">" << html_escape(desc_text) << "</FONT>>\n"
+          << "    ];\n";
       }
     }());
   }(std::make_index_sequence<std::tuple_size_v<Components>>{});
