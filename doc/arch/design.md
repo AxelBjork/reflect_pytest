@@ -10,7 +10,7 @@
 
 ### 1. Reflection-Driven Integration
 The "Single Source of Truth" is the C++ `messages.h` header. By reflecting over the `MsgId` enum and its associated payload types, the system automatically:
-- Generates Python bindings via [C++26 reflection](../reflection/system.md).
+- Generates Python serialization code via [C++26 reflection](../reflection/system.md).
 - Orchestrates UDP serialization/deserialization.
 - Produces comprehensive [protocol documentation](../ipc/protocol.md).
 

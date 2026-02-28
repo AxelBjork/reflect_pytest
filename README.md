@@ -49,7 +49,7 @@ The following internal documents provide detailed information on the system's de
 
 1. All message IDs live in `enum class MsgId : uint16_t`.
 2. Each ID is bound to its payload struct via `MessageTraits<MsgId::Foo>`.
-3. C++26 reflection walks the enum and every struct at compile time, emitting pybind11 bindings automatically.
+3. C++26 reflection walks the enum and every struct at compile time, emitting pure Python `@dataclass` types with `struct` packing/unpacking code automatically.
 4. pytest sends/receives real UDP packets using the generated Python types.
 
 ## Build & Test
@@ -82,9 +82,13 @@ In this devcontainer, the compiler is provided by the `gcc-snapshot` package fro
 
 Clang-based approaches (libTooling, AST matchers, Python plugins) require dissecting the AST externally — they are slow, fragile, and live outside the language. With C++26 reflection, introspection is seamless and native: normal C++ that reasons about its own types at compile time. This project is a proof-of-concept demonstrating that the result is dramatically simpler and more maintainable.
 
+**Why generate pure Python code instead of pybind11 or SWIG?**
+
+Tools like pybind11 are designed to let Python execute and interact directly with compiled C++ code (i.e., running C++ within the Python process). However, the goal of this project isn't to embed or execute C++ from Python—it's to allow two completely independent processes (the Python test harness and the C++ SIL application) to communicate seamlessly over a network protocol. By generating pure Python `@dataclass` serializers that exactly match the C++ memory layout, `pytest` can talk to the C++ application entirely over standard UDP sockets without needing any C++ runtime or extension bindings loaded into the test process.
+
 **Does the entire project need a C++26 compiler?**
 
-No. Only **two translation units** (the binding and doc generators) are compiled with `-freflection`. The core application, the IPC library, and all GoogleTest unit tests compile and pass under **C++20**. Reflection is used purely as a side-channel to generate Python bindings and documentation — production code stays on a stable standard.
+No. Only **two translation units** (the binding and doc generators) are compiled with `-freflection`. The core application, the IPC library, and all GoogleTest unit tests compile and pass under **C++20**. Reflection is used purely as a side-channel to generate Python serialization code and documentation — production code stays on a stable standard.
 
 **How does reflection handle nested structs and complex types?**
 
@@ -106,6 +110,6 @@ The test fixtures launch the application as a subprocess and poll over UDP until
 | Build | CMake + Ninja |
 | IPC | AF_UNIX `SOCK_DGRAM` |
 | Test transport | UDP (single port 9000) |
-| Python bindings | C++26 reflection (auto-generated) |
+| Python serialization | C++26 reflection (auto-generated dataclasses) |
 | C++ unit tests | GoogleTest |
 | SIL test runner | pytest + pytest-cov + pytest-xdist |

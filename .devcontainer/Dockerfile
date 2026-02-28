@@ -66,7 +66,6 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     pytest \
     pytest-cov \
     pytest-xdist \
-    pybind11
 
 # ── Non-root user 'vscode' with sudo ─────────────────────────────────────────
 ARG USERNAME=vscode
