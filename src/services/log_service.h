@@ -22,6 +22,8 @@ class DOC_DESC(
   explicit LogService(ipc::MessageBus& bus);
   ~LogService();
 
+  void start();
+
   LogService(const LogService&) = delete;
   LogService& operator=(const LogService&) = delete;
 

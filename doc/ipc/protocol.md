@@ -1,23 +1,28 @@
 # IPC Protocol Reference
 
+[Home](../../README.md)
+
 > **Auto-generated** by `generate_docs` using C++26 static reflection (P2996 + P3394).
 > Do not edit by hand — re-run `cmake --build build --target generate_docs` to refresh.
 
-This document describes the full wire protocol used between the Python test harness
-and the C++ SIL (Software-in-the-Loop) application.
-
 ## System Architecture
 
-```
-┌─────────────────────┐          UDP (port 9000)         ┌─────────────────────┐
-│   Python / pytest   │ ──────────────────────────────── │     sil_app (C++)   │
-│                     │   [uint16_t msgId][payload bytes] │                     │
-│  udp_client.py      │                                   │  UdpBridge          │
-│  generated.py       │                                   │  ├─ MessageBus      │
-└─────────────────────┘                                   │  ├─ Simulator       │
-                                                          │  └─ Logger          │
-                                                          └─────────────────────┘
-```
+The complete system architecture, wire format, and message flow are detailed below.
+
+![IPC Flow Diagram](ipc_flow.svg)
+
+### How to Read the Diagram
+
+The architecture is divided into three logical vertical layers:
+
+1.  **Test Harness (Left)**: The `pytest` environment. Test cases use the `UdpClient` to orchestrate scenarios, sending commands and receiving telemetry via the auto-generated Python bindings.
+2.  **Network Layer (Middle)**: The UDP transport bridging the two processes. It shows the explicit socket mapping (Port 9000 for Inbound SIL traffic, Port 9001 for Outbound) handled by the host OS.
+3.  **Simulator (Right)**: The C++ `sil_app`. The `UdpBridge` acts as a gateway, translating UDP packets into internal `MessageBus` events which are then routed to decoupled services.
+
+**Legend**:
+- **Solid White Lines**: External UDP socket traffic between the harness and the bridge.
+- **Dotted Slate Lines**: Internal C++ `MessageBus` Publish/Subscribe routing.
+- **Colored Nodes**: Services and components grouped by their logical domain.
 
 **Wire format:** Every datagram starts with a `uint16_t` message ID (host-byte
 order) followed immediately by the fixed-size payload struct (packed, no padding).
@@ -25,23 +30,16 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 **Threads (C++ side):**
 
-| Thread | Purpose |
-|---|---|
-| `main` | Waits on shutdown signal; futex sleep |
-| `heartbeat` | Publishes `LogPayload` "Hello World #N" every 500 ms |
-| `bus-listener` | AF\_UNIX recv loop → dispatch to subscribers |
-| `sim-exec` | Steps through `MotorSequencePayload` in real time |
-| `sim-log` | Publishes kinematics status log every 1 000 ms |
-| `bridge-rx` | UDP recv → injects into MessageBus |
+| Thread | Purpose | Location |
+|---|---|---|
+| `main` | Entry point; waits on shutdown signal (futex wait) | `main.cpp` |
+| `heartbeat` | Publishes standard "Heartbeat" logs every 500ms | `main.cpp` |
+| `bus-listener` | Listens to AF_UNIX socket for message routing | `MessageBus` |
+| `bridge-rx` | Receives and injects UDP packets into the local bus | `UdpBridge` |
+| `sim-clock` | **100Hz Heartbeat**: Drives physics ticks for all services | `StateService` |
+| `log-worker` | Async processing: prints logs and publishes to bus | `LogService` |
 
 ---
-
-## Message Flow
-
-This diagram gives three distinct columns: `Pytest` uses the `UdpClient` module to orchestrate test cases, `Network` maps the transport layer across two explicit sockets (`Client -> App` and `App -> Client`), and `Simulator` processes the messages internally.
-
-![IPC Flow Diagram](ipc_flow.svg)
-
 ---
 
 ## Component Services
@@ -1236,7 +1234,7 @@ _No fields._
 # From the repo root:
 cmake -B build -G Ninja
 cmake --build build --target generate_docs
-# Output: build/doc/README.md
+# Output: doc/ipc/protocol.md
 ```
 
 _Generated with GCC trunk `-std=c++26 -freflection` (P2996R13 + P3394R4)._

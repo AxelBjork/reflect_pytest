@@ -1,5 +1,7 @@
 # Autonomous Service Design Specification
 
+[Home](../../README.md) | [Architecture](./design.md) | [IPC Protocol](../ipc/protocol.md) | [Testing](../testing/sil_guide.md)
+
 The `AutonomousService` is a high-level vehicle controller modeled as a stateful agent that manages mission-level routing, environmental adaptation, and efficiency telemetry. It operates within the SIL (Software-In-the-Loop) environment, building upon the services provided by the motor, kinematics, and power subsystems.
 
 ## 1. Architectural Overview
@@ -9,7 +11,7 @@ The service acts as an orchestrator that translates goal-oriented routes into lo
 ### 1.1 Messaging and Integration
 The service participates in the internal message bus to consume physical feedback (position, speed, energy) and environmental conditions. It is specifically designed to work with the **strictly inbound** environment model, where environmental data is provided by external simulation components and merely consumed by the application logic.
 
-For a detailed reference of the wire-level messages consumed and produced by this service, see the [IPC Protocol Reference](file:///workspaces/reflect_pytest/doc/README.md).
+For a detailed reference of the wire-level messages consumed and produced by this service, see the [IPC Protocol Reference](../ipc/protocol.md).
 
 ## 2. Core Operational Capabilities
 
@@ -32,6 +34,11 @@ A key objective of the service is to provide high-fidelity reporting of mission 
 - **Environmental Context**: Logs the specific environmental regions encountered, providing a verifiable audit trail for efficiency variances.
 
 ## 3. Implementation and Performance
+
+The service is implemented as an asynchronous worker thread that sleeps on a `std::condition_variable` until a `PhysicsTick` is received. This ensures that its high-level logic does not block the real-time execution of other simulation components.
+
+- **Latency**: Mission logic executes in < 1ms on modern hardware, well within the 10ms frame budget of a 100Hz simulation.
+- **Scalability**: By using `std::shared_ptr` for environmental maps, multiple service instances can safely consume large spatial datasets without memory duplication.
 
 ## 4. Current Status and Gap Analysis (As of Feb 2026)
 

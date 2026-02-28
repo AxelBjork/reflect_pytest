@@ -4,20 +4,52 @@ A software-in-the-loop (SIL) test framework that uses **C++26 static reflection*
 
 ## Architecture
 
-> [!IMPORTANT]
-> The complete system architecture, wire format, and message flow are detailed in the auto-generated **IPC Protocol Reference**. Since the protocol is auto-generated using C++26 reflection, that document serves as the ground truth.
-> 👉 **[doc/README.md (IPC Protocol Reference)](doc/README.md)**
 
 The current POC implements a single-node Publisher/Subscriber bus backed by an AF_UNIX socket, bridged to a UDP port so `pytest` can interact with it.
 
-For more details on the software architecture and principles, see [Software Design](doc/agent/design.md).  
-For deep-dives into the C++26 introspection generation pipeline, see [Reflection System Design](doc/agent/reflection.md).
+```mermaid
+graph LR
+    subgraph Build ["Build-Time (C++)"]
+        HDR["Message Headers"] --> GEN["Generator"]
+        GEN -- "C++26 Reflection" --> PY["generated.py"]
+        GEN -- "C++26 Reflection" --> DOC["protocol.md"]
+    end
+
+    subgraph Runtime ["Runtime (SIL Testing)"]
+        SIL["sil_app (UDP Bridge)"] <-- "UDP :9000" --> TEST["pytest"]
+    end
+
+    HDR --> SIL
+    PY -. "pack / unpack" .-> TEST
+```
+
+## Visual Architecture
+
+The following diagram illustrates the complete system architecture and message flow, automatically generated from the C++ source code via reflection.
+
+## Documentation Index
+
+The following internal documents provide detailed information on the system's design and usage:
+
+### 🏗️ Architecture
+- **[Software Design Principles](doc/arch/design.md)**: SOA, IPC, and logging philosophy.
+- **[Autonomous Service Spec](doc/arch/autonomous_service.md)**: Waypoint controller and environment adaptation.
+
+### 🔮 Reflection System
+- **[Reflection System Architecture](doc/reflection/system.md)**: Deep dive into `std::meta` pipelines and binding generation.
+- **[C++26 Reflection Cheat Sheet](doc/reflection/cheat_sheet.md)**: Guide to P2996/P3394 features.
+
+### 🔌 IPC & Protocol
+- **[IPC Protocol Reference](doc/ipc/protocol.md)**: **Auto-generated** ground truth for wire formats and flows.
+
+### 🧪 Testing
+- **[SIL Testing Guide](doc/testing/sil_guide.md)**: How the Python test harness interacts with the C++ bus.
 
 ## How it works
 
 1. All message IDs live in `enum class MsgId : uint16_t`.
 2. Each ID is bound to its payload struct via `MessageTraits<MsgId::Foo>`.
-3. C++26 reflection walks the enum and every struct at compile time, emitting pybind11 bindings automatically.
+3. C++26 reflection walks the enum and every struct at compile time, emitting pure Python `@dataclass` types with `struct` packing/unpacking code automatically.
 4. pytest sends/receives real UDP packets using the generated Python types.
 
 ## Build & Test
@@ -44,6 +76,32 @@ This project relies on **C++26 static reflection** (P2996), which is currently o
 
 In this devcontainer, the compiler is provided by the `gcc-snapshot` package from the `ppa:ubuntu-toolchain-r/test` Ubuntu PPA. It installs to `/usr/lib/gcc-snapshot/bin/g++`. Note that despite being trunk, the snapshot sometimes self-reports its version as `12.0.0` depending on the build date, so not all C++23 features (like `<print>`) are necessarily present in the snapshot payload.
 
+## FAQ
+
+**Why C++26 reflection instead of Clang-based tooling?**
+
+Clang-based approaches (libTooling, AST matchers, Python plugins) require dissecting the AST externally — they are slow, fragile, and live outside the language. With C++26 reflection, introspection is seamless and native: normal C++ that reasons about its own types at compile time. This project is a proof-of-concept demonstrating that the result is dramatically simpler and more maintainable.
+
+**Why generate pure Python code instead of pybind11 or SWIG?**
+
+Tools like pybind11 are designed to let Python execute and interact directly with compiled C++ code (i.e., running C++ within the Python process). However, the goal of this project isn't to embed or execute C++ from Python—it's to allow two completely independent processes (the Python test harness and the C++ SIL application) to communicate seamlessly over a network protocol. By generating pure Python `@dataclass` serializers that exactly match the C++ memory layout, `pytest` can talk to the C++ application entirely over standard UDP sockets without needing any C++ runtime or extension bindings loaded into the test process.
+
+**Does the entire project need a C++26 compiler?**
+
+No. Only **two translation units** (the binding and doc generators) are compiled with `-freflection`. The core application, the IPC library, and all GoogleTest unit tests compile and pass under **C++20**. Reflection is used purely as a side-channel to generate Python serialization code and documentation — production code stays on a stable standard.
+
+**How does reflection handle nested structs and complex types?**
+
+The generator recursively unrolls struct fields, including fixed-size arrays and nested sub-structs, and fully handles native C++ padding via offset introspection. Template types get sanitized Python names automatically. Dynamic types are intentionally unsupported across the binary wire and trigger static assertions.
+
+**How is the system architecture diagram generated?**
+
+Each C++ service defines `Publishes` and `Subscribes` trait lists. The doc generator traverses these at compile time to build a complete topology graph emitted as Graphviz DOT. Reflection itself has never been the bottleneck — extracting the data is trivial. The challenge is in the visual representation: laying out clusters, aggregating edges, and producing a clean diagram from a complex message flow.
+
+**How does pytest synchronize with the C++ application?**
+
+The test fixtures launch the application as a subprocess and poll over UDP until it reports ready. Each test gets a fresh process and UDP client, ensuring isolation.
+
 ## Stack
 
 | Layer | Technology |
@@ -52,6 +110,6 @@ In this devcontainer, the compiler is provided by the `gcc-snapshot` package fro
 | Build | CMake + Ninja |
 | IPC | AF_UNIX `SOCK_DGRAM` |
 | Test transport | UDP (single port 9000) |
-| Python bindings | C++26 reflection (auto-generated) |
+| Python serialization | C++26 reflection (auto-generated dataclasses) |
 | C++ unit tests | GoogleTest |
 | SIL test runner | pytest + pytest-cov + pytest-xdist |

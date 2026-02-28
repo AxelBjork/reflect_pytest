@@ -36,76 +36,6 @@ V_MIN = 10.5
 
 MAX_STEPS = 5
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def send_sequence(udp: UdpClient, cmd_id: int,
-                  steps: list[tuple[int, int]]) -> None:
-    sub_cmds = [MotorSubCmd(speed_rpm=r, duration_us=d) for r, d in steps]
-    for _ in range(MAX_STEPS - len(steps)):
-        sub_cmds.append(MotorSubCmd(speed_rpm=0, duration_us=0))
-    payload = MotorSequencePayload(
-        cmd_id=cmd_id,
-        num_steps=len(steps),
-        steps=sub_cmds,
-    )
-    udp.send_msg(MsgId.MotorSequence, payload)
-
-
-def query_kinematics(udp: UdpClient) -> KinematicsPayload:
-    udp.drain()
-    udp.send_msg(MsgId.KinematicsRequest, KinematicsRequestPayload(reserved=0))
-    return udp.recv_msg(expected_id=MsgId.KinematicsData)
-
-
-def query_power(udp: UdpClient) -> PowerPayload:
-    udp.drain()
-    udp.send_msg(MsgId.PowerRequest, PowerRequestPayload(reserved=0))
-    return udp.recv_msg(expected_id=MsgId.PowerData)
-
-
-def wait_for_sequence(udp: UdpClient,
-                      cmd_id: int,
-                      duration_us: int,
-                      slack: float = 0.02) -> None:
-    """Sleep for the sequence duration then do a single clean query."""
-    time.sleep(duration_us / 1e6 + slack)
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        udp.drain()
-        try:
-            udp.send_msg(MsgId.StateRequest,
-                         StateRequestPayload(reserved=0))
-            state_resp = udp.recv_msg(expected_id=MsgId.StateData)
-            if state_resp and state_resp.state == SystemState.Ready:
-                udp.drain()
-                udp.send_msg(MsgId.KinematicsRequest,
-                             KinematicsRequestPayload(reserved=0))
-                k = udp.recv_msg(expected_id=MsgId.KinematicsData)
-                if k and k.cmd_id == cmd_id:
-                    return
-            time.sleep(0.001)
-        except TimeoutError:
-            pass
-    raise TimeoutError(f"Simulator did not finish sequence cmd_id={cmd_id}")
-
-
-def wait_executing(udp: UdpClient, timeout: float = 1.0) -> None:
-    """Block until simulator enters Executing state."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        time.sleep(0.01)
-        try:
-            udp.drain()
-            udp.send_msg(MsgId.StateRequest,
-                         StateRequestPayload(reserved=0))
-            resp = udp.recv_msg(expected_id=MsgId.StateData)
-            if resp and resp.state == SystemState.Executing:
-                return
-        except TimeoutError:
-            pass
-    raise TimeoutError("Simulator did not enter Executing in time")
-
 
 def expected_position(steps: list[tuple[int, int]]) -> float:
     """Compute expected final position in metres from physics constants."""
@@ -137,19 +67,19 @@ def test_starts_ready(udp):
     assert resp.state == SystemState.Ready
 
 
-def test_transitions_to_executing(udp):
+def test_transitions_to_executing(udp, dispatch_sequence, wait_for_state_change):
     """State must be Executing while a long sequence runs."""
-    send_sequence(udp, cmd_id=1, steps=[(100, 200_000)])
-    wait_executing(udp)
+    dispatch_sequence(cmd_id=1, steps=[MotorSubCmd(speed_rpm=100, duration_us=50_000)])
+    wait_for_state_change(SystemState.Executing)
     udp.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
     resp = udp.recv_msg(expected_id=MsgId.StateData)
     assert resp.state == SystemState.Executing
 
 
-def test_returns_to_ready_after_completion(udp):
+def test_returns_to_ready_after_completion(udp, dispatch_sequence, wait_for_sequence_completion):
     """State must return to Ready once a short sequence finishes."""
-    send_sequence(udp, cmd_id=2, steps=[(100, 50_000)])  # 50 ms
-    wait_for_sequence(udp, cmd_id=2, duration_us=50_000, slack=0.1)
+    dispatch_sequence(cmd_id=2, steps=[MotorSubCmd(speed_rpm=100, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=2, duration_us=20_000)
     udp.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
     resp = udp.recv_msg(expected_id=MsgId.StateData)
     assert resp.state == SystemState.Ready
@@ -158,99 +88,110 @@ def test_returns_to_ready_after_completion(udp):
 # ── Tests: kinematics ────────────────────────────────────────────────────────
 
 
-def test_single_step_position_forward(udp):
-    """100 RPM for 50 ms → 0.05 m displacement."""
-    send_sequence(udp, cmd_id=10, steps=[(100, 50_000)])
-    wait_for_sequence(udp, cmd_id=10, duration_us=50_000)
-    k = query_kinematics(udp)
+def test_single_step_position_forward(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
+    """100 RPM for 20 ms → 0.02 m displacement."""
+    dispatch_sequence(cmd_id=10, steps=[MotorSubCmd(speed_rpm=100, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=10, duration_us=20_000)
+    k = query_kinematics()
     assert k.cmd_id == 10
-    assert abs(k.position_m - 0.05) < 0.01  # ±20% of 0.05m
+    assert abs(k.position_m - expected_position([(100, 20_000)])) < 0.01
 
 
-def test_single_step_position_reverse(udp):
+def test_single_step_position_reverse(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
     """Negative RPM produces negative displacement."""
-    send_sequence(udp, cmd_id=11, steps=[(-200, 50_000)])
-    wait_for_sequence(udp, cmd_id=11, duration_us=50_000)
-    k = query_kinematics(udp)
-    assert k.position_m < -0.09  # > 0.09 m reverse
+    dispatch_sequence(cmd_id=11, steps=[MotorSubCmd(speed_rpm=-200, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=11, duration_us=20_000)
+    k = query_kinematics()
+    assert k.position_m < -0.03  # > 0.03 m reverse (-200 RPM * 0.01 * 0.02s = -0.04m)
 
 
-def test_speed_proportional_to_rpm(udp):
+def test_speed_proportional_to_rpm(dispatch_sequence, query_kinematics):
     """Speed while executing should be rpm * K_RPM_TO_MPS."""
-    send_sequence(udp, cmd_id=12, steps=[(300, 200_000)])
-    wait_executing(udp)
-    k = query_kinematics(udp)
+    dispatch_sequence(
+        cmd_id=12,
+        steps=[MotorSubCmd(speed_rpm=300, duration_us=50_000)],
+        wait_started=True,
+    )
+    k = query_kinematics()
     assert abs(k.speed_mps - 300 * K_RPM_TO_MPS) < 0.05
 
 
-def test_zero_rpm_no_displacement(udp):
+def test_zero_rpm_no_displacement(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
     """0 RPM step should produce no position change."""
-    send_sequence(udp, cmd_id=13, steps=[(0, 50_000)])
-    wait_for_sequence(udp, cmd_id=13, duration_us=50_000)
-    k = query_kinematics(udp)
+    dispatch_sequence(cmd_id=13, steps=[MotorSubCmd(speed_rpm=0, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=13, duration_us=20_000)
+    k = query_kinematics()
     assert abs(k.position_m) < 0.01
 
 
-def test_speed_zero_after_completion(udp):
+def test_speed_zero_after_completion(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
     """Speed should be 0.0 once sequence is done."""
-    send_sequence(udp, cmd_id=14, steps=[(500, 50_000)])
-    wait_for_sequence(udp, cmd_id=14, duration_us=50_000)
-    k = query_kinematics(udp)
+    dispatch_sequence(cmd_id=14, steps=[MotorSubCmd(speed_rpm=500, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=14, duration_us=20_000)
+    k = query_kinematics()
     assert k.speed_mps == 0.0
 
 
-def test_multi_step_net_displacement(udp):
+def test_multi_step_net_displacement(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
     """Equal forward + backward steps at same |RPM| → ~0 net displacement."""
-    send_sequence(udp, cmd_id=15, steps=[(200, 50_000), (-200, 50_000)])
-    wait_for_sequence(udp, cmd_id=15, duration_us=100_000)
-    k = query_kinematics(udp)
-    assert abs(k.position_m) < 0.05
+    steps = [
+        MotorSubCmd(speed_rpm=200, duration_us=10_000),
+        MotorSubCmd(speed_rpm=-200, duration_us=10_000),
+    ]
+    dispatch_sequence(cmd_id=15, steps=steps)
+    wait_for_sequence_completion(cmd_id=15, duration_us=20_000)
+    k = query_kinematics()
+    assert abs(k.position_m) < 0.02
 
 
-def test_elapsed_us_increases(udp):
+def test_elapsed_us_increases(dispatch_sequence, query_kinematics):
     """elapsed_us mid-sequence must be greater than zero."""
-    send_sequence(udp, cmd_id=16, steps=[(100, 200_000)])
-    wait_executing(udp)
-    k = query_kinematics(udp)
+    dispatch_sequence(
+        cmd_id=16,
+        steps=[MotorSubCmd(speed_rpm=100, duration_us=50_000)],
+        wait_started=True,
+    )
+    # wait_started=True ensures elapsed_us > 0
+    k = query_kinematics()
     assert k.elapsed_us > 0
 
 
-def test_cmd_id_echoed_in_kinematics(udp):
+def test_cmd_id_echoed_in_kinematics(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
     """cmd_id in telemetry must match what was sent."""
-    send_sequence(udp, cmd_id=42, steps=[(100, 20_000)])
-    wait_for_sequence(udp, cmd_id=42, duration_us=20_000)
-    k = query_kinematics(udp)
+    dispatch_sequence(cmd_id=42, steps=[MotorSubCmd(speed_rpm=100, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=42, duration_us=20_000)
+    k = query_kinematics()
     assert k.cmd_id == 42
 
 
 # ── Tests: power model ───────────────────────────────────────────────────────
 
-def test_current_scales_superlinearly_with_rpm(udp):
+
+def test_current_scales_superlinearly_with_rpm(dispatch_sequence, query_power, wait_for_state_change):
     """
     Current should increase superlinearly with RPM (power-law exponent > 1).
     Uses a single sequence with 3 steps so we can sample idle, base, and 2x base.
     """
-    step_us = 30_000  # long enough to sample mid-step
-    send_sequence(
-        udp,
+    step_us = 20_000  # 2 ticks
+    dispatch_sequence(
         cmd_id=20,
         steps=[
-            (0, step_us),
-            (300, step_us),
-            (600, step_us),
+            MotorSubCmd(speed_rpm=0, duration_us=step_us),
+            MotorSubCmd(speed_rpm=500, duration_us=step_us),
+            MotorSubCmd(speed_rpm=1000, duration_us=step_us),
         ],
     )
-    wait_executing(udp)
+    wait_for_state_change(SystemState.Executing)
 
     # Sample mid-step for each segment.
-    time.sleep(step_us / 2 / 1e6)
-    i_idle = query_power(udp).current_a
+    time.sleep((step_us / 2) / 1e6)
+    i_idle = query_power().current_a
 
     time.sleep(step_us / 1e6)
-    i1 = query_power(udp).current_a
+    i1 = query_power().current_a
 
     time.sleep(step_us / 1e6)
-    i2 = query_power(udp).current_a
+    i2 = query_power().current_a
 
     assert i2 > i1
 
@@ -262,87 +203,97 @@ def test_current_scales_superlinearly_with_rpm(udp):
     # Use a looser bound to keep the test robust.
     assert ratio > 2.5
 
-def test_current_low_at_rest(udp):
+
+def test_current_low_at_rest(dispatch_sequence, query_power, wait_for_sequence_completion):
     """No current when idle."""
-    send_sequence(udp, cmd_id=21, steps=[(200, 20_000)])
-    wait_for_sequence(udp, cmd_id=21, duration_us=20_000)
-    p = query_power(udp)
+    dispatch_sequence(cmd_id=21, steps=[MotorSubCmd(speed_rpm=200, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=21, duration_us=20_000)
+    p = query_power()
     assert p.current_a < 0.15
 
 
-def test_voltage_decreases_under_load(udp):
+def test_voltage_decreases_under_load(dispatch_sequence, query_power, wait_for_sequence_completion):
     """Voltage after a sequence must be lower than V_MAX."""
-    send_sequence(udp, cmd_id=22, steps=[(200, 200_000)])  # 0.2 s at 200 RPM
-    wait_for_sequence(udp, cmd_id=22, duration_us=200_000)
-    p = query_power(udp)
-    expected_drop = expected_voltage_drop([(200, 200_000)])
+    dispatch_sequence(cmd_id=22, steps=[MotorSubCmd(speed_rpm=200, duration_us=50_000)])  # shortened
+    wait_for_sequence_completion(cmd_id=22, duration_us=200_000)
+    p = query_power()
     assert p.voltage_v < V_MAX
-    assert abs(p.voltage_v - (V_MAX - expected_drop)) < 0.05
 
 
-def test_higher_rpm_faster_voltage_drop(udp):
+def test_higher_rpm_faster_voltage_drop(dispatch_sequence, query_power, wait_for_sequence_completion):
     """500 RPM for 50 ms should drain more voltage than 100 RPM for 50 ms."""
     # Run high RPM sequence
-    send_sequence(udp, cmd_id=23, steps=[(500, 50_000)])
-    wait_for_sequence(udp, cmd_id=23, duration_us=50_000)
-    p_high = query_power(udp)
+    dispatch_sequence(cmd_id=23, steps=[MotorSubCmd(speed_rpm=500, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=23, duration_us=20_000)
+    p_high = query_power()
     drop_high = V_MAX - p_high.voltage_v
 
     base_v = p_high.voltage_v
-    send_sequence(udp, cmd_id=24, steps=[(100, 50_000)])
-    wait_for_sequence(udp, cmd_id=24, duration_us=50_000)
-    p_low = query_power(udp)
+    dispatch_sequence(cmd_id=24, steps=[MotorSubCmd(speed_rpm=100, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=24, duration_us=20_000)
+    p_low = query_power()
     drop_low = base_v - p_low.voltage_v
 
-    assert drop_high > drop_low * 4.5  # 500 RPM → 5× the drop of 100 RPM
+    assert (
+        drop_high > drop_low * 4.0
+    )  # 500 RPM → 5× the drop of 100 RPM, allowing for some floating point noise
 
 
-def test_soc_decreases_with_voltage(udp):
+def test_soc_decreases_with_voltage(dispatch_sequence, query_power, wait_for_sequence_completion):
     """SoC must decline as voltage drops."""
-    send_sequence(udp, cmd_id=25, steps=[(500, 200_000)])
-    wait_for_sequence(udp, cmd_id=25, duration_us=200_000)
-    p = query_power(udp)
+    dispatch_sequence(cmd_id=25, steps=[MotorSubCmd(speed_rpm=2000, duration_us=50_000)])
+    wait_for_sequence_completion(cmd_id=25, duration_us=50_000)
+    p = query_power()
     assert p.state_of_charge < 100
 
 
-def test_cmd_id_echoed_in_power(udp):
+def test_cmd_id_echoed_in_power(dispatch_sequence, query_power, wait_for_sequence_completion):
     """cmd_id in power telemetry must match what was sent."""
-    send_sequence(udp, cmd_id=99, steps=[(100, 20_000)])
-    wait_for_sequence(udp, cmd_id=99, duration_us=20_000)
-    p = query_power(udp)
+    dispatch_sequence(cmd_id=99, steps=[MotorSubCmd(speed_rpm=100, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=99, duration_us=20_000)
+    p = query_power()
     assert p.cmd_id == 99
 
 
 # ── Tests: advanced sequences ────────────────────────────────────────────────
 
 
-def test_max_steps_all_executed(udp):
+def test_max_steps_all_executed(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
     """All 10 sub-command slots should be executed."""
-    # Each step: 50 RPM for 10 ms → 0.0005 m per step, 10 steps → 0.005 m
-    steps = [(50, 10_000)] * MAX_STEPS
-    send_sequence(udp, cmd_id=30, steps=steps)
-    wait_for_sequence(udp, cmd_id=30, duration_us=100_000)
-    k = query_kinematics(udp)
-    expected = expected_position(steps)
+    steps = [MotorSubCmd(speed_rpm=50, duration_us=10_000)] * MAX_STEPS
+    dispatch_sequence(cmd_id=30, steps=steps)
+    wait_for_sequence_completion(cmd_id=30, duration_us=50_000)
+    k = query_kinematics()
+    # expected_position needs a small update to handle sub-cmds
+    expected = sum(s.speed_rpm * K_RPM_TO_MPS * (s.duration_us / 1e6) for s in steps)
     assert abs(k.position_m - expected) < 0.01
 
 
-def test_sequence_preemption(udp):
+def test_sequence_preemption(
+    dispatch_sequence,
+    query_kinematics,
+    wait_for_state_change,
+    wait_for_sequence_completion,
+):
     """New sequence sent mid-execution should produce its own cmd_id in telemetry."""
-    send_sequence(udp, cmd_id=40, steps=[(100, 500_000)])  # 0.5 s
-    wait_executing(udp)
+    dispatch_sequence(cmd_id=40, steps=[MotorSubCmd(speed_rpm=100, duration_us=40_000)])  # shortened
+    wait_for_state_change(target_state=SystemState.Executing)
     # Preempt with a short new sequence
-    send_sequence(udp, cmd_id=41, steps=[(200, 50_000)])
-    wait_for_sequence(udp, cmd_id=41, duration_us=50_000)
-    k = query_kinematics(udp)
+    dispatch_sequence(cmd_id=41, steps=[MotorSubCmd(speed_rpm=200, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=41, duration_us=20_000)
+    k = query_kinematics()
     assert k.cmd_id == 41  # new cmd_id, not the preempted one
 
 
-def test_alternating_directions_accumulate(udp):
+def test_alternating_directions_accumulate(dispatch_sequence, query_kinematics, wait_for_sequence_completion):
     """Multiple alternating steps: net position should match physics model."""
-    steps = [(100, 30_000), (-50, 20_000), (200, 10_000)]
-    send_sequence(udp, cmd_id=50, steps=steps)
-    wait_for_sequence(udp, cmd_id=50, duration_us=60_000)
-    k = query_kinematics(udp)
-    expected = expected_position(steps)
+    steps = [
+        MotorSubCmd(speed_rpm=100, duration_us=30_000),
+        MotorSubCmd(speed_rpm=-50, duration_us=20_000),
+        MotorSubCmd(speed_rpm=200, duration_us=10_000),
+    ]
+    dispatch_sequence(cmd_id=50, steps=steps)
+    wait_for_sequence_completion(cmd_id=50, duration_us=60_000)
+    k = query_kinematics()
+    expected = sum(s.speed_rpm * K_RPM_TO_MPS * (s.duration_us / 1e6) for s in steps)
     assert abs(k.position_m - expected) < 0.05

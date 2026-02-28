@@ -1,6 +1,12 @@
 # Reflection System Design
 
-This document details the C++26 static reflection (P2996) implementation used within `reflect_pytest` to automatically generate Python bindings and Markdown documentation from the core C++ message definitions.
+[Home](../../README.md) | [Architecture](../arch/design.md) | [Cheat Sheet](./cheat_sheet.md) | [IPC Protocol](../ipc/protocol.md) | [Testing](../testing/sil_guide.md)
+
+This document details the C++26 static reflection (P2996) implementation used within `reflect_pytest` to automatically generate Python bindings and Markdown documentation from the core C++ message definitions. For a high-level overview of the feature set, see the [Reflection Cheat Sheet](./cheat_sheet.md).
+
+### 🤖 Agent Note
+> [!IMPORTANT]
+> To effectively reason about the message bus, AI agents MUST review the visual architecture in **[ipc_flow.png](../ipc/ipc_flow.png)**. This diagram provides the definitive mapping of service relationships and wire-protocol routing that source code alone cannot easily convey.
 
 ## Overview
 
@@ -55,7 +61,7 @@ The Python Code Generator iterates through the C++ structs to automatically writ
 
 ### Documentation Generation (`generator/doc_generator.h`)
 
-The Documentation Generator executes the same reflection techniques but outputs GitHub Flavored Markdown (`ipc_protocol.md`).
+The Documentation Generator executes the same reflection techniques but outputs GitHub Flavored Markdown ([protocol.md](../ipc/protocol.md)).
 
 1. **Payload Tables**: Introspects offsets and byte sizes using `sizeof(T)` to draw deterministic binary memory layouts for the IPC wire protocol.
 2. **Component Architecture via Metaprogramming**: Using variadic template inspection across `AllComponents` (a tuple of all services), the generator extracts `typename Component::Publishes` and `typename Component::Subscribes`. 

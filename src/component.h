@@ -2,6 +2,7 @@
 // component.h — Traits for compile-time component pub/sub wiring.
 
 #include <cstring>
+#include <type_traits>
 
 #include "message_bus.h"
 
@@ -35,27 +36,9 @@ struct IsInList<Target, MsgList<Ids...>> : MsgContains<Target, Ids...> {};
 template <MsgId Target, typename List>
 constexpr bool is_in_list_v = IsInList<Target, List>::value;
 
-template <MsgId Id>
-consteval bool is_local_only() {
-  if constexpr (requires { MessageTraits<Id>::local_only; }) {
-    return MessageTraits<Id>::local_only;
-  }
-  return false;
-}
-
 template <typename Component, MsgId Id>
 void bind_one(MessageBus& bus, Component* c) {
-  if constexpr (is_local_only<Id>()) {
-    bus.subscribe_local<Id>([c](const auto& p) { c->on_message(p); });
-  } else {
-    bus.subscribe(Id, [c](RawMessage msg) {
-      using Payload = typename MessageTraits<Id>::Payload;
-      if (msg.payload.size() != sizeof(Payload)) return;
-      Payload p{};
-      std::memcpy(&p, msg.payload.data(), sizeof(p));
-      c->on_message(p);
-    });
-  }
+  bus.subscribe<Id>([c](const typename MessageTraits<Id>::Payload& p) { c->on_message(p); });
 }
 
 template <typename Component, MsgId... Ids>
@@ -63,9 +46,18 @@ void bind_all(MessageBus& bus, Component* c, MsgList<Ids...>) {
   (bind_one<Component, Ids>(bus, c), ...);
 }
 
+// Try to publish from raw bytes by matching the MsgId against the Publishes
+// list.  Returns true if the id was found and the size matched.
 template <MsgId... Ids>
-constexpr bool runtime_check_publish(MsgId id, size_t size, MsgList<Ids...>) {
-  return ((id == Ids && size == sizeof(typename MessageTraits<Ids>::Payload)) || ...);
+bool try_publish_raw(MessageBus& bus, MsgId id, const void* data, size_t size, MsgList<Ids...>) {
+  return ((id == Ids && size == sizeof(typename MessageTraits<Ids>::Payload) &&
+           [&] {
+             typename MessageTraits<Ids>::Payload p{};
+             std::memcpy(&p, data, sizeof(p));
+             bus.publish<Ids>(p);
+             return true;
+           }()) ||
+          ...);
 }
 
 }  // namespace detail
@@ -88,11 +80,7 @@ class TypedPublisher {
   // determined at runtime (e.g. from a network packet). Returns true if
   // authorized and published.
   bool publish_if_authorized(MsgId id, const void* data, size_t size) {
-    if (detail::runtime_check_publish(id, size, typename Component::Publishes{})) {
-      bus_.publish_raw(id, data, size);
-      return true;
-    }
-    return false;
+    return detail::try_publish_raw(bus_, id, data, size, typename Component::Publishes{});
   }
 
   // Access the underlying bus for subscriptions.
@@ -101,11 +89,6 @@ class TypedPublisher {
   }
 
  private:
-  // Use publish() or publish_if_authorized() instead.
-  void publish_raw(MsgId id, const void* data, size_t size) {
-    bus_.publish_raw(id, data, size);
-  }
-
   MessageBus& bus_;
 };
 

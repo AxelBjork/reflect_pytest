@@ -5,3 +5,6 @@ addopts    = "-p no:cov -p no:xdist --timeout=2 --maxfail=2"
 
 [tool.flake8]
 max-line-length = 100
+
+[tool.black]
+line-length = 100

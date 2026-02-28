@@ -36,12 +36,16 @@ UdpBridge::UdpBridge(MessageBus& bus) : bus_(bus) {
     throw std::runtime_error("UdpBridge: pipe() failed");
   }
 
-  // Subscribe to explicit outgoing messages using the type list
+  // Subscribe to outgoing messages — typed handlers serialize to UDP.
   auto bind_udp = [this]<MsgId... Ids>(MsgList<Ids...>) {
-    (bus_.bus().subscribe(Ids, [this](RawMessage msg) { forward_to_udp(std::move(msg)); }), ...);
+    (bus_.bus().subscribe<Ids>(
+         [this](const typename MessageTraits<Ids>::Payload& p) { forward_to_udp<Ids>(p); }),
+     ...);
   };
   bind_udp(Subscribes{});
+}
 
+void UdpBridge::start() {
   rx_thread_ = std::thread(&UdpBridge::rx_loop, this);
 }
 
@@ -93,20 +97,6 @@ void UdpBridge::rx_loop() {
                                  static_cast<size_t>(n) - sizeof(uint16_t));
     }
   }
-}
-
-void UdpBridge::forward_to_udp(RawMessage msg) {
-  std::lock_guard lk(peer_mu_);
-  if (!peer_valid_) return;
-
-  // Re-assemble wire format: [uint16_t msgId][payload]
-  std::vector<uint8_t> buf(sizeof(uint16_t) + msg.payload.size());
-  uint16_t id = static_cast<uint16_t>(msg.msgId);
-  std::memcpy(buf.data(), &id, sizeof(id));
-  std::memcpy(buf.data() + sizeof(uint16_t), msg.payload.data(), msg.payload.size());
-
-  ::sendto(udp_fd_, buf.data(), buf.size(), 0, reinterpret_cast<const sockaddr*>(&peer_),
-           sizeof(peer_));
 }
 
 }  // namespace ipc

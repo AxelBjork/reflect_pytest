@@ -24,6 +24,8 @@ class DOC_DESC(
   explicit StateService(ipc::MessageBus& bus);
   ~StateService();
 
+  void start();
+
   StateService(const StateService&) = delete;
   StateService& operator=(const StateService&) = delete;
 

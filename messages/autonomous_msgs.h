@@ -136,12 +136,10 @@ template <>
 struct MessageTraits<MsgId::InternalEnvRequest> {
   using Payload = InternalEnvRequestPayload;
   static constexpr std::string_view name = "InternalEnvRequest";
-  static constexpr bool local_only = true;
 };
 
 template <>
 struct MessageTraits<MsgId::InternalEnvData> {
   using Payload = InternalEnvDataPayload;
   static constexpr std::string_view name = "InternalEnvData";
-  static constexpr bool local_only = true;
 };
