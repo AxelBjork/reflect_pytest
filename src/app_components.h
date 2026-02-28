@@ -2,6 +2,7 @@
 
 #include <tuple>
 #include <type_traits>
+#include <utility>
 
 #include "services/autonomous_service.h"
 #include "services/environment_service.h"
@@ -15,6 +16,27 @@
 
 namespace sil {
 
+namespace detail {
+
+// SFINAE helper to call .start() if it exists
+template <typename T>
+auto call_start_if_exists(T& service, int) -> decltype(service.start(), void()) {
+  service.start();
+}
+
+template <typename T>
+void call_start_if_exists(T&, long) {
+  // No-op for services without a start() method
+}
+
+template <typename Tuple, std::size_t... Is>
+void start_all_services(Tuple& services, std::index_sequence<Is...>) {
+  // Pass 0 (int) to prefer the template overload that takes 'int'
+  (call_start_if_exists(std::get<Is>(services), 0), ...);
+}
+
+}  // namespace detail
+
 /**
  * @warning CRITICAL: DO NOT MODIFY THIS FILE OR THE AppServicesContainer.
  *
@@ -27,7 +49,7 @@ namespace sil {
  */
 
 // A compile-time list of all services instantiated by the main application.
-// This is used by the documentation generator to automatically reflect over
+// This is also used by the documentation generator to automatically reflect over
 // the aggregate Subscribes/Publishes traits of the entire application.
 using AppServices =
     std::tuple<MotorService, KinematicsService, PowerService, StateService, ThermalService,
@@ -35,20 +57,23 @@ using AppServices =
 
 template <typename... Ts>
 struct AppServicesContainer {
+  ipc::MessageBus bus;
   std::tuple<Ts...> services;
 
-  AppServicesContainer(ipc::MessageBus& bus) : services(((void)sizeof(Ts), bus)...) {
+  AppServicesContainer() : bus(), services(((void)sizeof(Ts), std::ref(bus))...) {
+    // Phase 1: All constructors are finished (all subscriptions registered).
+    // Phase 2: Start background threads. Thread start provides memory barrier.
+    detail::start_all_services(services, std::index_sequence_for<Ts...>{});
   }
 };
 
 template <typename... Ts>
-AppServicesContainer<Ts...> create_services_impl(ipc::MessageBus& bus,
-                                                 std::type_identity<std::tuple<Ts...>>) {
-  return AppServicesContainer<Ts...>(bus);
+AppServicesContainer<Ts...> create_services_impl(std::type_identity<std::tuple<Ts...>>) {
+  return AppServicesContainer<Ts...>();
 }
 
-inline auto create_app_services(ipc::MessageBus& bus) {
-  return create_services_impl(bus, std::type_identity<AppServices>{});
+inline auto create_app_services() {
+  return create_services_impl(std::type_identity<AppServices>{});
 }
 
 }  // namespace sil

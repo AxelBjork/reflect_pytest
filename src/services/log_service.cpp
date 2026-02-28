@@ -23,6 +23,9 @@ static constexpr const char* sev_str(Severity s) {
 LogService::LogService(ipc::MessageBus& bus) : bus_(bus) {
   ComponentLogger::init(*this);
   ipc::bind_subscriptions(bus_, this);
+}
+
+void LogService::start() {
   worker_thread_ = std::thread([this] { worker_loop(); });
 }
 

@@ -9,7 +9,6 @@ set(CMAKE_BUILD_RPATH /usr/local/gcc-trunk/lib64)
 
 # ── IPC library ───────────────────────────────────────────────────────────────
 add_library(ipc STATIC
-    src/socket_bus.cpp
     src/message_bus.cpp
     src/udp_bridge.cpp
     src/component_logger.cpp
@@ -46,7 +45,7 @@ enable_testing()
 
 add_executable(unit_tests
     tests/cxx/test_placeholder.cpp
-    tests/cxx/test_socket_bus.cpp
+    tests/cxx/test_message_bus.cpp
 )
 target_link_libraries(unit_tests PRIVATE ipc GTest::gtest_main)
 

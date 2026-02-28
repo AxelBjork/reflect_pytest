@@ -2,12 +2,10 @@
 //
 // Threads:
 //   main         — waits on g_running (futex); zero CPU until signal
-//   heartbeat    — publishes "Hello World #N" every 500 ms; wakes on shutdown
-//   sim-exec     — inside MotorService: steps through MotorSubCmds in real time
-//   sim-log      — inside LogService: logs status every 1 000 ms
-//   bus-listener — inside MessageBus: AF_UNIX recv → dispatch
-//   logger       — dedicated: prints every LogMessage
+//   heartbeat    — publishes heartbeat logs every 500 ms; wakes on shutdown
 //   bridge-rx    — inside UdpBridge: UDP recv → bus inject
+//   sim-clock    — inside StateService: 100 Hz PhysicsTick heartbeat
+//   log-worker   — inside LogService: async log queue processing
 
 #include <atomic>
 #include <condition_variable>
@@ -17,7 +15,6 @@
 #include <thread>
 
 #include "app_components.h"
-#include "message_bus.h"
 
 static std::atomic<bool> g_running{true};
 
@@ -26,20 +23,16 @@ static void shutdown(int) {
   g_running.notify_all();
 }
 
-static constexpr char kSockPath[] = "/tmp/sil_bus.sock";
 static constexpr uint16_t kUdpPort = 9000;
 
 int main() {
   std::signal(SIGTERM, shutdown);
   std::signal(SIGINT, shutdown);
 
-  ipc::MessageBus bus(kSockPath);
+  auto app = sil::create_app_services();
+  auto& log_service = std::get<sil::LogService>(app.services);
 
-  // create_app_services now owns the LogService
-  auto services = sil::create_app_services(bus);
-  auto& log_service = std::get<sil::LogService>(services.services);
-
-  std::printf("[sil_app] started (UDP bridge on :%u, bus on %s)\n", kUdpPort, kSockPath);
+  std::printf("[sil_app] started (UDP bridge on :%u)\n", kUdpPort);
   std::fflush(stdout);
 
   // ── Heartbeat thread ──────────────────────────────────────────────────────

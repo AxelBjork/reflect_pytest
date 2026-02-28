@@ -4,7 +4,6 @@
 
 #include "msg_base.h"
 
-
 struct DOC_DESC("One timed motor command step, embedded in MotorSequencePayload.") MotorSubCmd {
   int16_t speed_rpm;
   uint32_t duration_us;
@@ -121,5 +120,4 @@ template <>
 struct MessageTraits<MsgId::MotorStatus> {
   using Payload = MotorStatusPayload;
   static constexpr std::string_view name = "MotorStatus";
-  static constexpr bool local_only = true;
 };

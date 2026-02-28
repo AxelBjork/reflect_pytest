@@ -1,5 +1,5 @@
 #pragma once
-// ipc/udp_bridge.hpp — UDP <-> MessageBus relay.
+// ipc/udp_bridge.h — UDP <-> MessageBus relay.
 //
 // pytest "subscribes" by sending any packet to listen_port.
 // The bridge records the sender's address and forwards all
@@ -7,13 +7,14 @@
 
 #include <netinet/in.h>
 
+#include <cstring>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "autonomous_msgs.h"
 #include "component.h"
 #include "core_msgs.h"
-#include "message_bus.h"
 #include "simulation_msgs.h"
 
 namespace ipc {
@@ -39,6 +40,7 @@ class DOC_DESC(
   UdpBridge(MessageBus& bus);
   ~UdpBridge();
 
+  void start();
   UdpBridge(const UdpBridge&) = delete;
   UdpBridge& operator=(const UdpBridge&) = delete;
 
@@ -53,7 +55,22 @@ class DOC_DESC(
   bool peer_valid_{false};
 
   void rx_loop();
-  void forward_to_udp(RawMessage msg);
+
+  // Serialize a typed payload to wire format and send via UDP.
+  template <MsgId Id>
+  void forward_to_udp(const typename MessageTraits<Id>::Payload& payload) {
+    std::lock_guard lk(peer_mu_);
+    if (!peer_valid_) return;
+
+    constexpr size_t psize = sizeof(typename MessageTraits<Id>::Payload);
+    std::vector<uint8_t> buf(sizeof(uint16_t) + psize);
+    uint16_t id = static_cast<uint16_t>(Id);
+    std::memcpy(buf.data(), &id, sizeof(id));
+    std::memcpy(buf.data() + sizeof(uint16_t), &payload, psize);
+
+    ::sendto(udp_fd_, buf.data(), buf.size(), 0, reinterpret_cast<const sockaddr*>(&peer_),
+             sizeof(peer_));
+  }
 };
 
 }  // namespace ipc

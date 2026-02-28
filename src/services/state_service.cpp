@@ -8,6 +8,9 @@ static constexpr uint32_t kTickUs = 10'000;  // 100Hz
 
 StateService::StateService(ipc::MessageBus& bus) : bus_(bus), logger_("state") {
   ipc::bind_subscriptions(bus, this);
+}
+
+void StateService::start() {
   clock_thread_ = std::thread([this] { clock_loop(); });
 }
 
@@ -56,9 +59,9 @@ void StateService::clock_loop() {
       if (state_ != SystemState::Executing) {
         rpm = 0;
       }
-
-      bus_.publish<MsgId::PhysicsTick>({cmd_id, rpm, kTickUs});
     }
+
+    bus_.publish<MsgId::PhysicsTick>({cmd_id, rpm, kTickUs});
 
     auto end = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
