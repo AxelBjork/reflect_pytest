@@ -1,5 +1,7 @@
 # C++26 Reflection Cheat Sheet & Summary
 
+[Home](../../README.md) | [Architecture](../arch/design.md) | [System Design](./system.md) | [IPC Protocol](../ipc/protocol.md) | [Testing](../testing/sil_guide.md)
+
 This document serves as a high-level summary and quick reference for the new static reflection features introduced in C++26 (P2996), specifically tailored to modern GCC snapshot environments. It also includes an architectural overview of how `reflect_pytest` utilizes these features.
 
 ## Approved Papers Reference
@@ -114,6 +116,49 @@ void generate_struct_fields() {
 }
 ```
 
+### 5. Annotations (P3394R4)
+
+C++26 introduces a mechanism for user-defined attributes that can be queried at compile-time via reflection. Unlike standard attributes (like `[[nodiscard]]`), these can carry data.
+
+**Syntax:** `[[= expression ]]`
+- The expression must be a constant expression.
+- Multiple annotations can be attached to a single entity.
+
+**Usage in reflect_pytest:**
+We use a custom struct `doc::Desc` to attach human-readable descriptions to messages and fields. These are abstracted behind the `DOC_DESC` macro.
+
+```cpp
+#ifdef REFLECT_DOCS
+  #define DOC_DESC(str) [[= doc::Desc(str) ]]
+#else
+  #define DOC_DESC(str)
+#endif
+
+struct [[DOC_DESC("This is a reflected message")]] MyMessage {
+    [[DOC_DESC("Primary key")]] uint32_t id;
+};
+```
+
+> [!NOTE]
+> **LSP Compatibility**: The `#ifdef` guard is specifically used to prevent LSPs (like `clangd`) from reporting errors on the `[[= ... ]]` syntax, which is currently only supported by GCC trunk with `-freflection`. This allows the rest of the codebase to remain clean and compatible with standard compilers while enabling rich metadata for the reflection generators.
+
+**Querying Annotations:**
+Use `std::meta::annotations_of(info)` to retrieve a vector of handles to the annotations.
+
+```cpp
+template <std::meta::info R>
+consteval std::string_view get_description() {
+    for (auto attr : std::meta::annotations_of(R)) {
+        if (std::meta::type_of(attr) == ^^doc::Desc) {
+            return std::meta::extract<doc::Desc>(attr).text;
+        }
+    }
+    return "";
+}
+```
+
+---
+
 ### Summary of New Syntax
 - `^^Entity` : Creates a `std::meta::info` handle representing `Entity`.
 - `[: info_val :]` : Reifies (splices) a `std::meta::info` back into a C++ type or value construct.
@@ -125,7 +170,7 @@ void generate_struct_fields() {
 
 How does `reflect_pytest` practically apply C++26 reflection?
 
-For deep-dives into the C++26 introspection generation pipeline, see **[Reflection System Design](agent/reflection.md)**.
+For deep-dives into the C++26 introspection generation pipeline, see **[Reflection System Design](./system.md)**.
 Here is a high-level summary:
 
 1. **Custom Annotations**: C++ structs are tagged with a `DOC_DESC("text")` macro. Reflection (`std::meta::annotations_of`) plucks these strings out to build documentation tables and Mermaid logic naturally from the compiler AST.

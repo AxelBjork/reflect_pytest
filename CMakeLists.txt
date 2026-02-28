@@ -53,16 +53,18 @@ target_compile_definitions(generate_docs PRIVATE REFLECT_DOCS)
 set_target_properties(generate_docs PROPERTIES EXPORT_COMPILE_COMMANDS OFF)
 
 add_custom_command(
-    OUTPUT ${CMAKE_SOURCE_DIR}/doc/README.md ${CMAKE_SOURCE_DIR}/doc/ipc_flow.dot ${CMAKE_SOURCE_DIR}/doc/ipc_flow.svg
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/doc
-    COMMAND generate_docs ${CMAKE_SOURCE_DIR}/doc > ${CMAKE_SOURCE_DIR}/doc/README.md
-    COMMAND dot -Tsvg ${CMAKE_SOURCE_DIR}/doc/ipc_flow.dot -o ${CMAKE_SOURCE_DIR}/doc/ipc_flow.svg
+    OUTPUT ${CMAKE_SOURCE_DIR}/doc/ipc/protocol.md ${CMAKE_SOURCE_DIR}/doc/ipc/ipc_flow.dot ${CMAKE_SOURCE_DIR}/doc/ipc/ipc_flow.svg ${CMAKE_SOURCE_DIR}/doc/ipc/ipc_flow.png
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/doc/ipc
+    COMMAND generate_docs ${CMAKE_SOURCE_DIR}/doc/ipc > ${CMAKE_SOURCE_DIR}/doc/ipc/protocol.md
+    COMMAND dot -Tsvg ${CMAKE_SOURCE_DIR}/doc/ipc/ipc_flow.dot -o ${CMAKE_SOURCE_DIR}/doc/ipc/ipc_flow.svg
+    COMMAND dot -Tpng ${CMAKE_SOURCE_DIR}/doc/ipc/ipc_flow.dot -o ${CMAKE_SOURCE_DIR}/doc/ipc/ipc_flow.png
     DEPENDS generate_docs
-    COMMENT "Generating IPC protocol documentation (Markdown, DOT, and SVG)..."
+    COMMENT "Generating IPC protocol documentation (Markdown, DOT, SVG, and PNG)..."
+    VERBATIM
 )
 
 add_custom_target(protocol_docs ALL
-    DEPENDS ${CMAKE_SOURCE_DIR}/doc/README.md
+    DEPENDS ${CMAKE_SOURCE_DIR}/doc/ipc/protocol.md
 )
 
 # ── GoogleTest ────────────────────────────────────────────────────────────────

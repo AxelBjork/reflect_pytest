@@ -5,6 +5,7 @@ CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
 compile_commands.json
+doc/ipc/ipc_flow.png
 
 # ── FetchContent / ExternalProject caches ─────────────────────────────────────
 _deps/

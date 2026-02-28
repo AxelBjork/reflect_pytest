@@ -4,14 +4,51 @@ A software-in-the-loop (SIL) test framework that uses **C++26 static reflection*
 
 ## Architecture
 
-> [!IMPORTANT]
-> The complete system architecture, wire format, and message flow are detailed in the auto-generated **IPC Protocol Reference**. Since the protocol is auto-generated using C++26 reflection, that document serves as the ground truth.
-> 👉 **[doc/README.md (IPC Protocol Reference)](doc/README.md)**
 
 The current POC implements a single-node Publisher/Subscriber bus backed by an AF_UNIX socket, bridged to a UDP port so `pytest` can interact with it.
 
-For more details on the software architecture and principles, see [Software Design](doc/agent/design.md).  
-For deep-dives into the C++26 introspection generation pipeline, see [Reflection System Design](doc/agent/reflection.md).
+```mermaid
+graph TD
+    subgraph Dev ["Development Flow (Reflection)"]
+        direction LR
+        MSG["messages/"] --> GEN["generator/"]
+        GEN -- "C++26 Reflection" --> PY_B["generated.py"]
+        GEN -- "C++26 Reflection" --> DOC["protocol.md"]
+    end
+
+    subgraph Run ["Runtime Flow (SIL Testing)"]
+        direction LR
+        SIL["sil_app"] <==> |UDP Bridge| TEST["pytest harness"]
+        PY_B -. "Python Bindings" .-> TEST
+    end
+```
+
+## Visual Architecture
+
+The following diagram illustrates the complete system architecture and message flow, automatically generated from the C++ source code via reflection.
+
+### 📊 System Message Flow
+![IPC Flow Diagram](doc/ipc/ipc_flow.svg)
+> [!TIP]
+> This diagram is available as a [High-Resolution SVG](doc/ipc/ipc_flow.svg) and a [Universal PNG](ipc_flow.png) in the repository.
+
+## Documentation Index
+
+The following internal documents provide detailed information on the system's design and usage:
+
+### 🏗️ Architecture
+- **[Software Design Principles](doc/arch/design.md)**: SOA, IPC, and logging philosophy.
+- **[Autonomous Service Spec](doc/arch/autonomous_service.md)**: Waypoint controller and environment adaptation.
+
+### 🔮 Reflection System
+- **[Reflection System Architecture](doc/reflection/system.md)**: Deep dive into `std::meta` pipelines and binding generation.
+- **[C++26 Reflection Cheat Sheet](doc/reflection/cheat_sheet.md)**: Guide to P2996/P3394 features.
+
+### 🔌 IPC & Protocol
+- **[IPC Protocol Reference](doc/ipc/protocol.md)**: **Auto-generated** ground truth for wire formats and flows.
+
+### 🧪 Testing
+- **[SIL Testing Guide](doc/testing/sil_guide.md)**: How the Python test harness interacts with the C++ bus.
 
 ## How it works
 

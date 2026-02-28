@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+// C++26 Reflection Annotations (P3394R4)
+// See doc/reflection_cheat_sheet.md for details on the [[= ]] syntax.
 #if defined(REFLECT_DOCS)
 #define DOC_DESC(...) [[= doc::Desc(__VA_ARGS__)]]
 #else

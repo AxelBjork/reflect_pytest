@@ -1,5 +1,7 @@
 # Software Design - Reflect Pytest
 
+[Home](../../README.md) | [Reflection](../reflection/system.md) | [IPC Protocol](../ipc/protocol.md) | [Testing](../testing/sil_guide.md)
+
 ## Overview
 
 `reflect_pytest` is a Software-in-the-Loop (SIL) test framework designed to bridge the gap between low-level C++ simulation logic and high-level Python testing without the burden of manual glue code. It leverages **C++26 Static Reflection** (P2996) to automatically generate introspection metadata for IPC messages.
@@ -8,9 +10,9 @@
 
 ### 1. Reflection-Driven Integration
 The "Single Source of Truth" is the C++ `messages.h` header. By reflecting over the `MsgId` enum and its associated payload types, the system automatically:
-- Generates Python bindings via `C++26 reflection`.
+- Generates Python bindings via [C++26 reflection](../reflection/system.md).
 - Orchestrates UDP serialization/deserialization.
-- Produces comprehensive protocol documentation.
+- Produces comprehensive [protocol documentation](../ipc/protocol.md).
 
 ### 2. Service-Oriented Architecture (SOA)
 The C++ application is composed of modular, decoupled services (e.g., `MotorService`, `KinematicsService`, `LogService`).
@@ -23,6 +25,8 @@ Communication between services happens over a `MessageBus` (backed by `AF_UNIX` 
 - **Non-blocking**: Publishing a message is a fast, non-blocking operation (copying into the socket buffer).
 - **Decoupling**: Publishers don't know who is listening.
 - **Bridging**: The `UdpBridge` acts as a generic relay, forwarding bus traffic to external UDP listeners (like `pytest`).
+
+![IPC Flow Diagram](../ipc/ipc_flow.svg)
 
 ### 4. Specialized Logging Pipeline
 Logging is handled by a dedicated `LogService` acting as an asynchronous sink.
