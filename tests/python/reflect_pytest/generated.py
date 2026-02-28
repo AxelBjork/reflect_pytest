@@ -25,6 +25,8 @@ class MsgId(IntEnum):
     AutoDriveStatus = 61
     InternalEnvRequest = 1000
     InternalEnvData = 1001
+    SensorRequest = 1100
+    SensorAck = 1101
 
 class Severity(IntEnum):
     Debug = 0
@@ -664,6 +666,45 @@ class InternalEnvDataPayload:
         offset += sub_size
         return cls(ptr=ptr)
 
+@dataclass
+class SensorRequestPayload:
+    """Explicitly request the SensorService to read terrain from its deterministically generated world map."""
+    WIRE_SIZE = 8
+    target_location: Point2D
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(self.target_location.pack_wire())
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "SensorRequestPayload":
+        offset = 0
+        sub_size = Point2D.WIRE_SIZE
+        target_location = Point2D.unpack_wire(data[offset:offset+sub_size])
+        offset += sub_size
+        return cls(target_location=target_location)
+
+@dataclass
+class SensorAckPayload:
+    """ACK sent by SensorService indicating whether a SensorRequest was accepted."""
+    WIRE_SIZE = 8
+    request_id: int
+    success: bool
+    reason: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<I?B2x", self.request_id, self.success, self.reason))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "SensorAckPayload":
+        offset = 0
+        request_id, success, reason = struct.unpack_from("<I?B2x", data, offset)
+        offset += struct.calcsize("<I?B2x")
+        return cls(request_id=request_id, success=success, reason=reason)
+
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
     MsgId.PhysicsTick: PhysicsTickPayload,
@@ -684,6 +725,8 @@ MESSAGE_BY_ID = {
     MsgId.AutoDriveStatus: AutoDriveStatusTemplate_8__4,
     MsgId.InternalEnvRequest: InternalEnvRequestPayload,
     MsgId.InternalEnvData: InternalEnvDataPayload,
+    MsgId.SensorRequest: SensorRequestPayload,
+    MsgId.SensorAck: SensorAckPayload,
 }
 
 PAYLOAD_SIZE_BY_ID = {
@@ -706,5 +749,7 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.AutoDriveStatus: 156,
     MsgId.InternalEnvRequest: 8,
     MsgId.InternalEnvData: 16,
+    MsgId.SensorRequest: 8,
+    MsgId.SensorAck: 8,
 }
 

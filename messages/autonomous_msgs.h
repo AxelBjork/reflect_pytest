@@ -143,3 +143,28 @@ struct MessageTraits<MsgId::InternalEnvData> {
   using Payload = InternalEnvDataPayload;
   static constexpr std::string_view name = "InternalEnvData";
 };
+
+struct DOC_DESC(
+    "Explicitly request the SensorService to read terrain from its deterministically generated "
+    "world map.") SensorRequestPayload {
+  Point2D target_location;
+};
+
+struct DOC_DESC("ACK sent by SensorService indicating whether a SensorRequest was accepted.")
+    SensorAckPayload {
+  uint32_t request_id;  // Simple correlator
+  bool success;         // True if data will follow, false if rejected
+  uint8_t reason;       // 0 = Success, 1 = Not Ready, 2 = Busy
+};
+
+template <>
+struct MessageTraits<MsgId::SensorRequest> {
+  using Payload = SensorRequestPayload;
+  static constexpr std::string_view name = "SensorRequest";
+};
+
+template <>
+struct MessageTraits<MsgId::SensorAck> {
+  using Payload = SensorAckPayload;
+  static constexpr std::string_view name = "SensorAck";
+};

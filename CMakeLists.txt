@@ -16,15 +16,20 @@ add_library(ipc STATIC
 target_include_directories(ipc PUBLIC src messages)
 
 # ── SIL application ───────────────────────────────────────────────────────────
-add_executable(sil_app src/main.cpp
-    src/services/motor_service.cpp
-    src/services/log_service.cpp
-    src/services/state_service.cpp
+add_executable(sil_app
+    src/main.cpp
+    src/message_bus.cpp
+    src/udp_bridge.cpp
+    src/component_logger.cpp
     src/services/environment_service.cpp
-    src/services/autonomous_service.cpp
     src/services/kinematics_service.cpp
+    src/services/motor_service.cpp
     src/services/power_service.cpp
+    src/services/state_service.cpp
     src/services/thermal_service.cpp
+    src/services/autonomous_service.cpp
+    src/services/log_service.cpp
+    src/services/sensor_service.cpp
 )
 target_link_libraries(sil_app PRIVATE ipc)
 

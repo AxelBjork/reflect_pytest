@@ -58,6 +58,10 @@ enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is
   // Internal/Service-specific (formerly in internal_messages.h)
   InternalEnvRequest = 1000,
   InternalEnvData = 1001,
+
+  // SensorService messages
+  SensorRequest = 1100,
+  SensorAck = 1101,
 };
 
 /**

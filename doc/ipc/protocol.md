@@ -111,6 +111,12 @@ It maintains a spatial cache of environmental regions (temperature, incline, fri
 
 The service accepts an AutoDriveCommand containing a list of ManeuverNodes (1D x targets). While a route is active, it periodically requests Kinematics and Power data on each physics tick, decides when the current node has been reached, and publishes MotorSequence commands to drive toward the node.
 
+### `SensorService`
+
+> Sensor service that procedurally generates environment data based on requested locations.
+
+Simulates reading from physical terrain maps with a 10us delay.
+
 ### `LogService`
 
 > Asynchronous logging sink.
@@ -241,8 +247,9 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > State machine snapshot. Carries the current coarse lifecycle SystemState.
 
-**Direction:** `Outbound`<br>
+**Direction:** `Bidirectional`<br>
 **Publishes:** `StateService`<br>
+**Subscribes:** `SensorService`<br>
 **Wire size:** 1 bytes
 
 <table>
@@ -685,7 +692,8 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 
 > Environmental conditions delivered to the application from the outside world.
 
-**Direction:** `Inbound`<br>
+**Direction:** `Bidirectional`<br>
+**Publishes:** `SensorService`<br>
 **Subscribes:** `ThermalService`, `EnvironmentService`<br>
 **Wire size:** 36 bytes
 
@@ -1223,6 +1231,100 @@ Each section corresponds to one `MsgId` enumerator. The **direction badge** show
 **Wire size:** 16 bytes
 
 _No fields._
+
+</details>
+
+<details>
+<summary><font size="+1"><b>MsgId::SensorRequest (SensorRequestPayload)</b></font></summary>
+
+> Explicitly request the SensorService to read terrain from its deterministically generated world map.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `SensorService`<br>
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>target_location</td>
+      <td>Point2D</td>
+      <td>Any</td>
+      <td>8</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+#### Sub-struct: `Point2D`
+
+> A 2D coordinate.
+
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>x</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>y</td>
+      <td>float</td>
+      <td>float</td>
+      <td>4</td>
+      <td>4</td>
+    </tr>
+  </tbody>
+</table>
+
+</details>
+
+<details>
+<summary><font size="+1"><b>MsgId::SensorAck (SensorAckPayload)</b></font></summary>
+
+> ACK sent by SensorService indicating whether a SensorRequest was accepted.
+
+**Direction:** `Outbound`<br>
+**Publishes:** `SensorService`<br>
+**Wire size:** 8 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>request_id</td>
+      <td>uint32_t</td>
+      <td>int</td>
+      <td>4</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>success</td>
+      <td>bool</td>
+      <td>bool</td>
+      <td>1</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>reason</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>5</td>
+    </tr>
+  </tbody>
+</table>
 
 </details>
 

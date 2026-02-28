@@ -10,6 +10,7 @@
 #include "services/log_service.h"
 #include "services/motor_service.h"
 #include "services/power_service.h"
+#include "services/sensor_service.h"
 #include "services/state_service.h"
 #include "services/thermal_service.h"
 #include "udp_bridge.h"
@@ -53,7 +54,7 @@ void start_all_services(Tuple& services, std::index_sequence<Is...>) {
 // the aggregate Subscribes/Publishes traits of the entire application.
 using AppServices =
     std::tuple<MotorService, KinematicsService, PowerService, StateService, ThermalService,
-               EnvironmentService, AutonomousService, LogService, ipc::UdpBridge>;
+               EnvironmentService, AutonomousService, SensorService, LogService, ipc::UdpBridge>;
 
 template <typename... Ts>
 struct AppServicesContainer {
