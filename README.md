@@ -8,29 +8,24 @@ A software-in-the-loop (SIL) test framework that uses **C++26 static reflection*
 The current POC implements a single-node Publisher/Subscriber bus backed by an AF_UNIX socket, bridged to a UDP port so `pytest` can interact with it.
 
 ```mermaid
-graph TD
-    subgraph Dev ["Development Flow (Reflection)"]
-        direction LR
-        MSG["messages/"] --> GEN["generator/"]
-        GEN -- "C++26 Reflection" --> PY_B["generated.py"]
+graph LR
+    subgraph Build ["Build-Time (C++)"]
+        HDR["Message Headers"] --> GEN["Generator"]
+        GEN -- "C++26 Reflection" --> PY["generated.py"]
         GEN -- "C++26 Reflection" --> DOC["protocol.md"]
     end
 
-    subgraph Run ["Runtime Flow (SIL Testing)"]
-        direction LR
-        SIL["sil_app"] <==> |UDP Bridge| TEST["pytest harness"]
-        PY_B -. "Python Bindings" .-> TEST
+    subgraph Runtime ["Runtime (SIL Testing)"]
+        SIL["sil_app (UDP Bridge)"] <-- "UDP :9000" --> TEST["pytest"]
     end
+
+    HDR --> SIL
+    PY -. "pack / unpack" .-> TEST
 ```
 
 ## Visual Architecture
 
 The following diagram illustrates the complete system architecture and message flow, automatically generated from the C++ source code via reflection.
-
-### 📊 System Message Flow
-![IPC Flow Diagram](doc/ipc/ipc_flow.svg)
-> [!TIP]
-> This diagram is available as a [High-Resolution SVG](doc/ipc/ipc_flow.svg) and a [Universal PNG](ipc_flow.png) in the repository.
 
 ## Documentation Index
 
@@ -80,6 +75,28 @@ pytest tests/python/ --simulator --sim-duration 10
 This project relies on **C++26 static reflection** (P2996), which is currently only available on GCC trunk via the `-freflection` flag. 
 
 In this devcontainer, the compiler is provided by the `gcc-snapshot` package from the `ppa:ubuntu-toolchain-r/test` Ubuntu PPA. It installs to `/usr/lib/gcc-snapshot/bin/g++`. Note that despite being trunk, the snapshot sometimes self-reports its version as `12.0.0` depending on the build date, so not all C++23 features (like `<print>`) are necessarily present in the snapshot payload.
+
+## FAQ
+
+**Why C++26 reflection instead of Clang-based tooling?**
+
+Clang-based approaches (libTooling, AST matchers, Python plugins) require dissecting the AST externally — they are slow, fragile, and live outside the language. With C++26 reflection, introspection is seamless and native: normal C++ that reasons about its own types at compile time. This project is a proof-of-concept demonstrating that the result is dramatically simpler and more maintainable.
+
+**Does the entire project need a C++26 compiler?**
+
+No. Only **two translation units** (the binding and doc generators) are compiled with `-freflection`. The core application, the IPC library, and all GoogleTest unit tests compile and pass under **C++20**. Reflection is used purely as a side-channel to generate Python bindings and documentation — production code stays on a stable standard.
+
+**How does reflection handle nested structs and complex types?**
+
+The generator recursively unrolls struct fields, including fixed-size arrays and nested sub-structs, and fully handles native C++ padding via offset introspection. Template types get sanitized Python names automatically. Dynamic types are intentionally unsupported across the binary wire and trigger static assertions.
+
+**How is the system architecture diagram generated?**
+
+Each C++ service defines `Publishes` and `Subscribes` trait lists. The doc generator traverses these at compile time to build a complete topology graph emitted as Graphviz DOT. Reflection itself has never been the bottleneck — extracting the data is trivial. The challenge is in the visual representation: laying out clusters, aggregating edges, and producing a clean diagram from a complex message flow.
+
+**How does pytest synchronize with the C++ application?**
+
+The test fixtures launch the application as a subprocess and poll over UDP until it reports ready. Each test gets a fresh process and UDP client, ensuring isolation.
 
 ## Stack
 
