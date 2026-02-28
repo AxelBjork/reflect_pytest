@@ -12,8 +12,8 @@
 namespace sil {
 
 inline constexpr float I_IDLE_A = 0.1f;
-inline constexpr float K_RPM_POW_TO_AMPS = 2.0e-4f; // A / RPM^p (tune)
-inline constexpr float RPM_EXP_P = 1.5f;            // p (tune)
+inline constexpr float K_RPM_POW_TO_AMPS = 1.863e-4f;  // A / RPM^p (tuned for 200 RPM -> 1.0A)
+inline constexpr float RPM_EXP_P = 1.6f;               // p (tune)
 inline constexpr float R_INT_OHM = 0.5f;
 inline constexpr float V_MAX = 12.6f;
 inline constexpr float V_MIN = 10.5f;
@@ -26,8 +26,7 @@ class DOC_DESC(
     "limits.\n\n"
     "$$ I = I_{idle} + k\\,|\\mathrm{RPM}|^{p} \\quad (\\mathrm{A}) $$\n\n"
     "$$ V \\mathrel{-}= I\\,R_{int}\\,\\Delta t $$\n\n"
-    "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$")
-PowerService {
+    "$$ SOC = \\frac{V - V_{min}}{V_{max} - V_{min}} \\times 100 $$") PowerService {
  public:
   using Subscribes = ipc::MsgList<MsgId::PhysicsTick, MsgId::PowerRequest, MsgId::MotorStatus>;
   using Publishes = ipc::MsgList<MsgId::PowerData>;

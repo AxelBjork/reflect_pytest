@@ -21,11 +21,14 @@ from reflect_pytest.generated import (
     SystemState,
     StateRequestPayload,
 )
+
+pytest_plugins = ["fixtures_ipc"]
 from udp_client import UdpClient
 
 _REPO_ROOT = Path(__file__).parents[2]
 _BUILD_DIR = _REPO_ROOT / "build"
 _DEFAULT_BIN = _BUILD_DIR / "sil_app"
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -38,8 +41,7 @@ def pytest_addoption(parser):
         "--build-only",
         action="store_true",
         default=False,
-        help="Run C++ build and CTest, then exit without running Python "
-        "tests.",
+        help="Run C++ build and CTest, then exit without running Python " "tests.",
     )
     parser.addoption(
         "--simulator",
@@ -75,27 +77,21 @@ def pytest_sessionstart(session):
             )
             # 2. CMake Build
             subprocess.run(
-                ["cmake", "--build",
-                 str(_BUILD_DIR), "--", "-j8"],
+                ["cmake", "--build", str(_BUILD_DIR), "--", "-j8"],
                 cwd=_REPO_ROOT,
                 check=True,
             )
             # 3. CTest Unit Tests
             subprocess.run(
-                [
-                    "ctest", "--test-dir",
-                    str(_BUILD_DIR), "--output-on-failure"
-                ],
+                ["ctest", "--test-dir", str(_BUILD_DIR), "--output-on-failure"],
                 cwd=_REPO_ROOT,
                 check=True,
             )
             print("[pytest] C++ Build & CTest successful.\n")
             if config.getoption("--build-only"):
-                pytest.exit("C++ build/CTest successful. Exiting.",
-                            returncode=0)
+                pytest.exit("C++ build/CTest successful. Exiting.", returncode=0)
         except subprocess.CalledProcessError as e:
-            pytest.exit(f"C++ build or CTest failed (rc={e.returncode})",
-                        returncode=1)
+            pytest.exit(f"C++ build or CTest failed (rc={e.returncode})", returncode=1)
 
     if config.getoption("--simulator"):
         duration = config.getoption("--sim-duration")
@@ -121,10 +117,16 @@ def pytest_sessionstart(session):
                 with UdpClient() as udp:
                     udp.register()
                     import struct
+
                     # Demo seq: +1500 RPM (1s), Stop (1s), -1500 RPM (1s)
-                    steps = [(500, 2_000_000), (1000, 2_000_000),
-                             (1500, 2_000_000), (-500, 2_000_000),
-                             (-1000, 2_000_000), (-1500, 2_000_000)]
+                    steps = [
+                        (500, 2_000_000),
+                        (1000, 2_000_000),
+                        (1500, 2_000_000),
+                        (-500, 2_000_000),
+                        (-1000, 2_000_000),
+                        (-1500, 2_000_000),
+                    ]
                     sub_cmds = [MotorSubCmd(speed_rpm=r, duration_us=d) for r, d in steps]
                     for _ in range(5 - len(steps)):
                         sub_cmds.append(MotorSubCmd(speed_rpm=0, duration_us=0))
@@ -134,8 +136,7 @@ def pytest_sessionstart(session):
                         steps=sub_cmds,
                     )
                     udp.send_msg(MsgId.MotorSequence, payload)
-                    print("\n[pytest] Injected demo sequence "
-                          "(cmd=1, 6 steps)\n")
+                    print("\n[pytest] Injected demo sequence " "(cmd=1, 6 steps)\n")
             except Exception as e:
                 print(f"[pytest] Could not send demo sequence: {e}")
 
@@ -143,14 +144,12 @@ def pytest_sessionstart(session):
 
             while time.monotonic() - startTime < duration:
                 if proc.poll() is not None:
-                    print(f"\n[pytest] sil_app exited early "
-                          f"(rc={proc.returncode})")
+                    print(f"\n[pytest] sil_app exited early " f"(rc={proc.returncode})")
                     break
                 time.sleep(0.1)
 
             if proc.poll() is None:
-                print(f"\n[pytest] Simulator duration ({duration}s) reached. "
-                      "Shutting down...")
+                print(f"\n[pytest] Simulator duration ({duration}s) reached. " "Shutting down...")
                 proc.terminate()
                 try:
                     proc.wait(timeout=5)
@@ -172,8 +171,9 @@ def _sil_binary() -> Path:
     env_override = os.environ.get("SIL_APP")
     path = Path(env_override) if env_override else _DEFAULT_BIN
     if not path.exists():
-        pytest.fail(f"sil_app binary not found at {path}.\n"
-                    "Run: cmake -B build -G Ninja && cmake --build build")
+        pytest.fail(
+            f"sil_app binary not found at {path}.\n" "Run: cmake -B build -G Ninja && cmake --build build"
+        )
     return path
 
 
@@ -201,8 +201,7 @@ def udp(sil_process):
             if sil_process.poll() is not None:
                 pytest.fail(f"sil_app exited (rc={sil_process.returncode})")
             try:
-                client.send_msg(MsgId.StateRequest,
-                                StateRequestPayload(reserved=0))
+                client.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
                 resp = client.recv_msg(expected_id=MsgId.StateData)
                 if resp and resp.state == SystemState.Ready:
                     break
@@ -215,3 +214,26 @@ def udp(sil_process):
         yield client
 
 
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Write the entire test session output to the build directory."""
+    log_path = _BUILD_DIR / "Testing" / "Temporary" / "pytest_session.log"
+    (log_path.parent).mkdir(parents=True, exist_ok=True)
+
+    with open(log_path, "w") as f:
+        # Get all reports
+        for stats_key in terminalreporter.stats:
+            for rep in terminalreporter.stats[stats_key]:
+                if hasattr(rep, "nodeid") and hasattr(rep, "when"):
+                    f.write(f"\n{'='*80}\n")
+                    f.write(f"REPORT: {rep.nodeid} ({rep.when})\n")
+                    f.write(f"{'='*80}\n")
+                    if hasattr(rep, "longreprtext") and rep.longreprtext:
+                        f.write(rep.longreprtext + "\n")
+                    if rep.capstdout:
+                        f.write("--- STDOUT ---\n")
+                        f.write(rep.capstdout + "\n")
+                    if rep.capstderr:
+                        f.write("--- STDERR ---\n")
+                        f.write(rep.capstderr + "\n")
+
+    print(f"\n[pytest] Session logs dumped to: {log_path}")

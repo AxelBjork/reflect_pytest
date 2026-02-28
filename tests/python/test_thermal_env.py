@@ -16,104 +16,47 @@ from reflect_pytest.generated import (
     BoundingBox2D,
 )
 
-def send_sequence(udp, cmd_id: int, steps: list[tuple[int, int]]) -> None:
-    sub_cmds = [MotorSubCmd(speed_rpm=r, duration_us=d) for r, d in steps]
-    for _ in range(5 - len(steps)):
-        sub_cmds.append(MotorSubCmd(speed_rpm=0, duration_us=0))
-    payload = MotorSequencePayload(
-        cmd_id=cmd_id,
-        num_steps=len(steps),
-        steps=sub_cmds,
-    )
-    udp.send_msg(MsgId.MotorSequence, payload)
 
-def drain_socket(udp) -> None:
-    old_timeout = udp._sock.gettimeout()
-    udp._sock.settimeout(0.0)
-    try:
-        while True:
-            udp._sock.recvfrom(4096)
-    except (BlockingIOError, TimeoutError):
-        pass
-    finally:
-        udp._sock.settimeout(old_timeout)
-
-def query_thermal(udp) -> ThermalPayload:
-    drain_socket(udp)
-    udp.send_msg(MsgId.ThermalRequest, ThermalRequestPayload(reserved=0))
-    return udp.recv_msg(expected_id=MsgId.ThermalData)
-
-def set_environment(udp, ambient_temp: float, incline: float, friction: float, max_speed_rpm: int, region_id: int = 0):
-    drain_socket(udp)
-    # EnvironmentData is inbound (sent by Python, consumed by App)
-    env = EnvironmentPayload(
-        region_id=region_id,
-        bounds=BoundingBox2D(min_pt=Point2D(x=0,y=0), max_pt=Point2D(x=0,y=0)), 
-        ambient_temp_c=ambient_temp,
-        incline_percent=incline,
-        surface_friction=friction,
-        max_speed_rpm=max_speed_rpm
-    )
-    udp.send_msg(MsgId.EnvironmentData, env)
-    
-    # EnvironmentService ACKs receipt to confirm it's been processed
-    ack = udp.recv_msg(expected_id=MsgId.EnvironmentAck)
-    assert ack.region_id == region_id
-    return env 
-
-def wait_for_sequence(udp, cmd_id: int, duration_us: int) -> None:
-    time.sleep(duration_us / 1e6 + 0.05)
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        drain_socket(udp)
-        try:
-            udp.send_msg(MsgId.StateRequest, StateRequestPayload(reserved=0))
-            state_resp = udp.recv_msg(expected_id=MsgId.StateData)
-            if state_resp and state_resp.state == SystemState.Ready:
-                return
-        except TimeoutError:
-            pass
-        time.sleep(0.01)
-    raise TimeoutError("Simulator did not finish sequence")
-
-def test_environment_override(udp):
+def test_environment_override(set_environment):
     """Test that setting environment conditions is acknowledged by the application."""
-    resp = set_environment(udp, ambient_temp=30.5, incline=5.0, friction=0.8, max_speed_rpm=100)
+    resp = set_environment(ambient_temp=30.5, incline=5.0, friction=0.8, max_speed_rpm=100)
     assert resp.ambient_temp_c == 30.5
     assert resp.incline_percent == 5.0
     assert resp.surface_friction == pytest.approx(0.8)
     assert resp.max_speed_rpm == 100
-    
-def test_thermal_increases_under_load(udp):
+
+
+def test_thermal_increases_under_load(
+    set_environment, dispatch_sequence, query_thermal, wait_for_sequence_completion
+):
     """Motor and battery temps should increase when driving."""
-    set_environment(udp, ambient_temp=20.0, incline=0.0, friction=1.0, max_speed_rpm=100)
-    
-    initial_thermal = query_thermal(udp)
-    
+    set_environment(ambient_temp=20.0, incline=0.0, friction=1.0, max_speed_rpm=100)
+    initial_thermal = query_thermal()
+
     # Run a high RPM sequence
-    send_sequence(udp, cmd_id=101, steps=[(800, 200_000)])
-    wait_for_sequence(udp, cmd_id=101, duration_us=200_000)
-    
-    final_thermal = query_thermal(udp)
-    
+    dispatch_sequence(cmd_id=101, steps=[MotorSubCmd(speed_rpm=800, duration_us=50_000)])  # shortened
+    wait_for_sequence_completion(cmd_id=101, duration_us=50_000)
+
+    final_thermal = query_thermal()
+
     assert final_thermal.motor_temp_c > initial_thermal.motor_temp_c
     assert final_thermal.battery_temp_c > initial_thermal.battery_temp_c
 
-def test_thermal_cooldown(udp):
+
+def test_thermal_cooldown(set_environment, dispatch_sequence, query_thermal, wait_for_sequence_completion):
     """Temperatures should drop back towards ambient over time when idle."""
-    set_environment(udp, ambient_temp=10.0, incline=0.0, friction=1.0, max_speed_rpm=100)
-    
+    set_environment(ambient_temp=10.0, incline=0.0, friction=1.0, max_speed_rpm=100)
     # Heat it up significantly
-    send_sequence(udp, cmd_id=102, steps=[(800, 50_000)])
-    wait_for_sequence(udp, cmd_id=102, duration_us=50_000)
-    
-    hot_thermal = query_thermal(udp)
+    dispatch_sequence(cmd_id=102, steps=[MotorSubCmd(speed_rpm=800, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=102, duration_us=20_000)
+
+    hot_thermal = query_thermal()
     assert hot_thermal.motor_temp_c > 10.0
-    
+
     # Let it cool down with a zero-rpm sequence to trigger PhysicsTicks
-    send_sequence(udp, cmd_id=103, steps=[(0, 50_000)])
-    wait_for_sequence(udp, cmd_id=103, duration_us=50_000)
-    
-    cool_thermal = query_thermal(udp)
+    dispatch_sequence(cmd_id=103, steps=[MotorSubCmd(speed_rpm=0, duration_us=20_000)])
+    wait_for_sequence_completion(cmd_id=103, duration_us=20_000)
+
+    cool_thermal = query_thermal()
     assert cool_thermal.motor_temp_c < hot_thermal.motor_temp_c
     assert cool_thermal.battery_temp_c < hot_thermal.battery_temp_c

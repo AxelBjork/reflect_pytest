@@ -4,8 +4,10 @@ import struct
 from dataclasses import dataclass
 from enum import IntEnum
 
+
 class MsgId(IntEnum):
     """Top-level message type selector. The uint16_t wire value is the first two bytes of every UDP datagram."""
+
     Log = 0
     PhysicsTick = 1
     StateRequest = 2
@@ -26,11 +28,13 @@ class MsgId(IntEnum):
     InternalEnvRequest = 1000
     InternalEnvData = 1001
 
+
 class Severity(IntEnum):
     Debug = 0
     Info = 1
     Warn = 2
     Error = 3
+
 
 class SystemState(IntEnum):
     Init = 0
@@ -39,15 +43,19 @@ class SystemState(IntEnum):
     Stopping = 3
     Fault = 4
 
+
 class DriveMode(IntEnum):
     """Control strategy for the autonomous service."""
+
     Eco = 0
     Performance = 1
     ManualTuning = 2
 
+
 @dataclass
 class MotorSubCmd:
     """One timed motor command step, embedded in MotorSequencePayload."""
+
     WIRE_SIZE = 8
     speed_rpm: int
     duration_us: int
@@ -64,9 +72,11 @@ class MotorSubCmd:
         offset += struct.calcsize("<h2xI")
         return cls(speed_rpm=speed_rpm, duration_us=duration_us)
 
+
 @dataclass
 class LogPayload:
     """Unidirectional log/trace message. Emitted by any component at any time; Python receives these passively from the bus."""
+
     WIRE_SIZE = 288
     text: bytes
     severity: Severity
@@ -84,9 +94,11 @@ class LogPayload:
         offset += struct.calcsize("<255sB32s")
         return cls(text=text, severity=severity, component=component)
 
+
 @dataclass
 class PhysicsTickPayload:
     """Internal IPC: Broadcast at 100Hz during sequence execution to drive kinematics and power integration."""
+
     WIRE_SIZE = 12
     cmd_id: int
     speed_rpm: int
@@ -104,9 +116,11 @@ class PhysicsTickPayload:
         offset += struct.calcsize("<Ih2xI")
         return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, dt_us=dt_us)
 
+
 @dataclass
 class StateRequestPayload:
     """One-byte sentinel. Send to request a StateData snapshot. The payload value is ignored."""
+
     WIRE_SIZE = 1
     reserved: int
 
@@ -122,9 +136,11 @@ class StateRequestPayload:
         offset += struct.calcsize("<B")
         return cls(reserved=reserved)
 
+
 @dataclass
 class StatePayload:
     """State machine snapshot. Carries the current coarse lifecycle SystemState."""
+
     WIRE_SIZE = 1
     state: SystemState
 
@@ -140,9 +156,11 @@ class StatePayload:
         offset += struct.calcsize("<B")
         return cls(state=state)
 
+
 @dataclass
 class MotorSequencePayloadTemplate_5:
     """Deliver a sequence of up to 10 timed motor sub-commands to the simulator. The simulator executes steps[0..num_steps-1] in real time; a new command preempts any currently running sequence."""
+
     WIRE_SIZE = 48
     cmd_id: int
     num_steps: int
@@ -152,7 +170,7 @@ class MotorSequencePayloadTemplate_5:
         data = bytearray()
         data.extend(struct.pack("<IB3x", self.cmd_id, self.num_steps))
         for item in self.steps:
-            if not hasattr(item, 'pack_wire'):
+            if not hasattr(item, "pack_wire"):
                 if isinstance(item, tuple):
                     item = MotorSubCmd(*item)
                 elif isinstance(item, dict):
@@ -170,14 +188,16 @@ class MotorSequencePayloadTemplate_5:
         steps = []
         for _ in range(5):
             sub_size = MotorSubCmd.WIRE_SIZE
-            item = MotorSubCmd.unpack_wire(data[offset:offset+sub_size])
+            item = MotorSubCmd.unpack_wire(data[offset : offset + sub_size])
             steps.append(item)
             offset += sub_size
         return cls(cmd_id=cmd_id, num_steps=num_steps, steps=steps)
 
+
 @dataclass
 class MotorStatusPayload:
     """Internal IPC: Periodic RPM and activity update from MotorService."""
+
     WIRE_SIZE = 8
     cmd_id: int
     speed_rpm: int
@@ -195,9 +215,11 @@ class MotorStatusPayload:
         offset += struct.calcsize("<Ih?1x")
         return cls(cmd_id=cmd_id, speed_rpm=speed_rpm, is_active=is_active)
 
+
 @dataclass
 class KinematicsRequestPayload:
     """One-byte sentinel. Send to request a KinematicsData snapshot. The payload value is ignored."""
+
     WIRE_SIZE = 1
     reserved: int
 
@@ -213,9 +235,11 @@ class KinematicsRequestPayload:
         offset += struct.calcsize("<B")
         return cls(reserved=reserved)
 
+
 @dataclass
 class KinematicsPayload:
     """Kinematics snapshot sent in response to a KinematicsRequest. Reflects physics state integrated since the start of the current sequence."""
+
     WIRE_SIZE = 16
     cmd_id: int
     elapsed_us: int
@@ -234,9 +258,11 @@ class KinematicsPayload:
         offset += struct.calcsize("<IIff")
         return cls(cmd_id=cmd_id, elapsed_us=elapsed_us, position_m=position_m, speed_mps=speed_mps)
 
+
 @dataclass
 class PowerRequestPayload:
     """One-byte sentinel. Send to request a PowerData snapshot. The payload value is ignored."""
+
     WIRE_SIZE = 1
     reserved: int
 
@@ -252,9 +278,11 @@ class PowerRequestPayload:
         offset += struct.calcsize("<B")
         return cls(reserved=reserved)
 
+
 @dataclass
 class PowerPayload:
     """Power-model snapshot sent in response to a PowerRequest. Models a simple battery with internal resistance drain."""
+
     WIRE_SIZE = 16
     cmd_id: int
     voltage_v: float
@@ -273,9 +301,11 @@ class PowerPayload:
         offset += struct.calcsize("<IffB3x")
         return cls(cmd_id=cmd_id, voltage_v=voltage_v, current_a=current_a, state_of_charge=state_of_charge)
 
+
 @dataclass
 class ThermalRequestPayload:
     """One-byte sentinel. Send to request a ThermalData snapshot. The payload value is ignored."""
+
     WIRE_SIZE = 1
     reserved: int
 
@@ -291,9 +321,11 @@ class ThermalRequestPayload:
         offset += struct.calcsize("<B")
         return cls(reserved=reserved)
 
+
 @dataclass
 class ThermalPayload:
     """Thermal snapshot sent in response to a ThermalRequest. Models temperature of motor and battery based on power metrics."""
+
     WIRE_SIZE = 8
     motor_temp_c: float
     battery_temp_c: float
@@ -310,9 +342,11 @@ class ThermalPayload:
         offset += struct.calcsize("<ff")
         return cls(motor_temp_c=motor_temp_c, battery_temp_c=battery_temp_c)
 
+
 @dataclass
 class EnvironmentAckPayload:
     """ACK sent by the application when it accepts new environment data."""
+
     WIRE_SIZE = 4
     region_id: int
 
@@ -328,9 +362,11 @@ class EnvironmentAckPayload:
         offset += struct.calcsize("<I")
         return cls(region_id=region_id)
 
+
 @dataclass
 class Point2D:
     """A 2D coordinate."""
+
     WIRE_SIZE = 8
     x: float
     y: float
@@ -347,9 +383,11 @@ class Point2D:
         offset += struct.calcsize("<ff")
         return cls(x=x, y=y)
 
+
 @dataclass
 class EnvironmentRequestPayload:
     """Request conditions for a specific location."""
+
     WIRE_SIZE = 8
     target_location: Point2D
 
@@ -362,13 +400,15 @@ class EnvironmentRequestPayload:
     def unpack_wire(cls, data: bytes) -> "EnvironmentRequestPayload":
         offset = 0
         sub_size = Point2D.WIRE_SIZE
-        target_location = Point2D.unpack_wire(data[offset:offset+sub_size])
+        target_location = Point2D.unpack_wire(data[offset : offset + sub_size])
         offset += sub_size
         return cls(target_location=target_location)
+
 
 @dataclass
 class BoundingBox2D:
     """An axis-aligned 2D bounding box."""
+
     WIRE_SIZE = 16
     min_pt: Point2D
     max_pt: Point2D
@@ -383,16 +423,18 @@ class BoundingBox2D:
     def unpack_wire(cls, data: bytes) -> "BoundingBox2D":
         offset = 0
         sub_size = Point2D.WIRE_SIZE
-        min_pt = Point2D.unpack_wire(data[offset:offset+sub_size])
+        min_pt = Point2D.unpack_wire(data[offset : offset + sub_size])
         offset += sub_size
         sub_size = Point2D.WIRE_SIZE
-        max_pt = Point2D.unpack_wire(data[offset:offset+sub_size])
+        max_pt = Point2D.unpack_wire(data[offset : offset + sub_size])
         offset += sub_size
         return cls(min_pt=min_pt, max_pt=max_pt)
+
 
 @dataclass
 class EnvironmentPayload:
     """Environmental conditions delivered to the application from the outside world."""
+
     WIRE_SIZE = 36
     region_id: int
     bounds: BoundingBox2D
@@ -405,7 +447,15 @@ class EnvironmentPayload:
         data = bytearray()
         data.extend(struct.pack("<I", self.region_id))
         data.extend(self.bounds.pack_wire())
-        data.extend(struct.pack("<ffff", self.ambient_temp_c, self.incline_percent, self.surface_friction, self.max_speed_rpm))
+        data.extend(
+            struct.pack(
+                "<ffff",
+                self.ambient_temp_c,
+                self.incline_percent,
+                self.surface_friction,
+                self.max_speed_rpm,
+            )
+        )
         return bytes(data)
 
     @classmethod
@@ -414,15 +464,26 @@ class EnvironmentPayload:
         region_id = struct.unpack_from("<I", data, offset)[0]
         offset += struct.calcsize("<I")
         sub_size = BoundingBox2D.WIRE_SIZE
-        bounds = BoundingBox2D.unpack_wire(data[offset:offset+sub_size])
+        bounds = BoundingBox2D.unpack_wire(data[offset : offset + sub_size])
         offset += sub_size
-        ambient_temp_c, incline_percent, surface_friction, max_speed_rpm = struct.unpack_from("<ffff", data, offset)
+        ambient_temp_c, incline_percent, surface_friction, max_speed_rpm = struct.unpack_from(
+            "<ffff", data, offset
+        )
         offset += struct.calcsize("<ffff")
-        return cls(region_id=region_id, bounds=bounds, ambient_temp_c=ambient_temp_c, incline_percent=incline_percent, surface_friction=surface_friction, max_speed_rpm=max_speed_rpm)
+        return cls(
+            region_id=region_id,
+            bounds=bounds,
+            ambient_temp_c=ambient_temp_c,
+            incline_percent=incline_percent,
+            surface_friction=surface_friction,
+            max_speed_rpm=max_speed_rpm,
+        )
+
 
 @dataclass
 class Vector3:
     """A 3D coordinate vector."""
+
     WIRE_SIZE = 12
     x: float
     y: float
@@ -440,9 +501,11 @@ class Vector3:
         offset += struct.calcsize("<fff")
         return cls(x=x, y=y, z=z)
 
+
 @dataclass
 class ManeuverNode:
     """A single target maneuver point."""
+
     WIRE_SIZE = 12
     target_pos: Point2D
     timeout_ms: int
@@ -457,15 +520,17 @@ class ManeuverNode:
     def unpack_wire(cls, data: bytes) -> "ManeuverNode":
         offset = 0
         sub_size = Point2D.WIRE_SIZE
-        target_pos = Point2D.unpack_wire(data[offset:offset+sub_size])
+        target_pos = Point2D.unpack_wire(data[offset : offset + sub_size])
         offset += sub_size
         timeout_ms = struct.unpack_from("<H2x", data, offset)[0]
         offset += struct.calcsize("<H2x")
         return cls(target_pos=target_pos, timeout_ms=timeout_ms)
 
+
 @dataclass
 class AutoDriveCommandTemplate_8:
     """High level autonomous driving route and configuration."""
+
     WIRE_SIZE = 180
     route_name: bytes
     mode: DriveMode
@@ -477,9 +542,11 @@ class AutoDriveCommandTemplate_8:
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<32sB3xf?3x", self.route_name, self.mode, self.p_gain, self.use_environment_tuning))
+        data.extend(
+            struct.pack("<32sB3xf?3x", self.route_name, self.mode, self.p_gain, self.use_environment_tuning)
+        )
         for item in self.route_transform:
-            if not hasattr(item, 'pack_wire'):
+            if not hasattr(item, "pack_wire"):
                 if isinstance(item, tuple):
                     item = Vector3(*item)
                 elif isinstance(item, dict):
@@ -489,7 +556,7 @@ class AutoDriveCommandTemplate_8:
             data.extend(item.pack_wire())
         data.extend(struct.pack("<B3x", self.num_nodes))
         for item in self.route:
-            if not hasattr(item, 'pack_wire'):
+            if not hasattr(item, "pack_wire"):
                 if isinstance(item, tuple):
                     item = ManeuverNode(*item)
                 elif isinstance(item, dict):
@@ -507,7 +574,7 @@ class AutoDriveCommandTemplate_8:
         route_transform = []
         for _ in range(3):
             sub_size = Vector3.WIRE_SIZE
-            item = Vector3.unpack_wire(data[offset:offset+sub_size])
+            item = Vector3.unpack_wire(data[offset : offset + sub_size])
             route_transform.append(item)
             offset += sub_size
         num_nodes = struct.unpack_from("<B3x", data, offset)[0]
@@ -515,14 +582,24 @@ class AutoDriveCommandTemplate_8:
         route = []
         for _ in range(8):
             sub_size = ManeuverNode.WIRE_SIZE
-            item = ManeuverNode.unpack_wire(data[offset:offset+sub_size])
+            item = ManeuverNode.unpack_wire(data[offset : offset + sub_size])
             route.append(item)
             offset += sub_size
-        return cls(route_name=route_name, mode=mode, p_gain=p_gain, use_environment_tuning=use_environment_tuning, route_transform=route_transform, num_nodes=num_nodes, route=route)
+        return cls(
+            route_name=route_name,
+            mode=mode,
+            p_gain=p_gain,
+            use_environment_tuning=use_environment_tuning,
+            route_transform=route_transform,
+            num_nodes=num_nodes,
+            route=route,
+        )
+
 
 @dataclass
 class ManeuverStats:
     """Efficiency metrics for a single traveled node."""
+
     WIRE_SIZE = 16
     initial_energy_mj: float
     final_energy_mj: float
@@ -531,19 +608,36 @@ class ManeuverStats:
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<ffff", self.initial_energy_mj, self.final_energy_mj, self.energy_per_meter_mj, self.total_energy_used_mj))
+        data.extend(
+            struct.pack(
+                "<ffff",
+                self.initial_energy_mj,
+                self.final_energy_mj,
+                self.energy_per_meter_mj,
+                self.total_energy_used_mj,
+            )
+        )
         return bytes(data)
 
     @classmethod
     def unpack_wire(cls, data: bytes) -> "ManeuverStats":
         offset = 0
-        initial_energy_mj, final_energy_mj, energy_per_meter_mj, total_energy_used_mj = struct.unpack_from("<ffff", data, offset)
+        initial_energy_mj, final_energy_mj, energy_per_meter_mj, total_energy_used_mj = struct.unpack_from(
+            "<ffff", data, offset
+        )
         offset += struct.calcsize("<ffff")
-        return cls(initial_energy_mj=initial_energy_mj, final_energy_mj=final_energy_mj, energy_per_meter_mj=energy_per_meter_mj, total_energy_used_mj=total_energy_used_mj)
+        return cls(
+            initial_energy_mj=initial_energy_mj,
+            final_energy_mj=final_energy_mj,
+            energy_per_meter_mj=energy_per_meter_mj,
+            total_energy_used_mj=total_energy_used_mj,
+        )
+
 
 @dataclass
 class EnvId:
     """Environment ID Wrapper."""
+
     WIRE_SIZE = 4
     id: int
 
@@ -559,9 +653,11 @@ class EnvId:
         offset += struct.calcsize("<I")
         return cls(id=id)
 
+
 @dataclass
 class AutoDriveStatusTemplate_8__4:
     """Status and efficiency report from the AutonomousService."""
+
     WIRE_SIZE = 156
     cmd_id: int
     current_node_idx: int
@@ -573,9 +669,11 @@ class AutoDriveStatusTemplate_8__4:
 
     def pack_wire(self) -> bytes:
         data = bytearray()
-        data.extend(struct.pack("<IB?B1x", self.cmd_id, self.current_node_idx, self.route_complete, self.num_stats))
+        data.extend(
+            struct.pack("<IB?B1x", self.cmd_id, self.current_node_idx, self.route_complete, self.num_stats)
+        )
         for item in self.node_stats:
-            if not hasattr(item, 'pack_wire'):
+            if not hasattr(item, "pack_wire"):
                 if isinstance(item, tuple):
                     item = ManeuverStats(*item)
                 elif isinstance(item, dict):
@@ -585,7 +683,7 @@ class AutoDriveStatusTemplate_8__4:
             data.extend(item.pack_wire())
         data.extend(struct.pack("<B3x", self.num_environments_used))
         for item in self.environment_ids:
-            if not hasattr(item, 'pack_wire'):
+            if not hasattr(item, "pack_wire"):
                 if isinstance(item, tuple):
                     item = EnvId(*item)
                 elif isinstance(item, dict):
@@ -603,7 +701,7 @@ class AutoDriveStatusTemplate_8__4:
         node_stats = []
         for _ in range(8):
             sub_size = ManeuverStats.WIRE_SIZE
-            item = ManeuverStats.unpack_wire(data[offset:offset+sub_size])
+            item = ManeuverStats.unpack_wire(data[offset : offset + sub_size])
             node_stats.append(item)
             offset += sub_size
         num_environments_used = struct.unpack_from("<B3x", data, offset)[0]
@@ -611,10 +709,19 @@ class AutoDriveStatusTemplate_8__4:
         environment_ids = []
         for _ in range(4):
             sub_size = EnvId.WIRE_SIZE
-            item = EnvId.unpack_wire(data[offset:offset+sub_size])
+            item = EnvId.unpack_wire(data[offset : offset + sub_size])
             environment_ids.append(item)
             offset += sub_size
-        return cls(cmd_id=cmd_id, current_node_idx=current_node_idx, route_complete=route_complete, num_stats=num_stats, node_stats=node_stats, num_environments_used=num_environments_used, environment_ids=environment_ids)
+        return cls(
+            cmd_id=cmd_id,
+            current_node_idx=current_node_idx,
+            route_complete=route_complete,
+            num_stats=num_stats,
+            node_stats=node_stats,
+            num_environments_used=num_environments_used,
+            environment_ids=environment_ids,
+        )
+
 
 @dataclass
 class InternalEnvRequestPayload:
@@ -634,6 +741,7 @@ class InternalEnvRequestPayload:
         offset += struct.calcsize("<ff")
         return cls(x=x, y=y)
 
+
 @dataclass
 class std__shared_ptr_const_EnvironmentPayload:
     WIRE_SIZE = 16
@@ -645,6 +753,7 @@ class std__shared_ptr_const_EnvironmentPayload:
     @classmethod
     def unpack_wire(cls, data: bytes) -> "std__shared_ptr_const_EnvironmentPayload":
         return cls()
+
 
 @dataclass
 class InternalEnvDataPayload:
@@ -660,9 +769,10 @@ class InternalEnvDataPayload:
     def unpack_wire(cls, data: bytes) -> "InternalEnvDataPayload":
         offset = 0
         sub_size = std__shared_ptr_const_EnvironmentPayload.WIRE_SIZE
-        ptr = std__shared_ptr_const_EnvironmentPayload.unpack_wire(data[offset:offset+sub_size])
+        ptr = std__shared_ptr_const_EnvironmentPayload.unpack_wire(data[offset : offset + sub_size])
         offset += sub_size
         return cls(ptr=ptr)
+
 
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
@@ -707,4 +817,3 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.InternalEnvRequest: 8,
     MsgId.InternalEnvData: 16,
 }
-
