@@ -30,14 +30,14 @@ If `sizeof(received payload) != sizeof(Payload)` the message is silently discard
 
 **Threads (C++ side):**
 
-| Thread | Purpose |
-|---|---|
-| `main` | Waits on shutdown signal; futex sleep |
-| `heartbeat` | Publishes `LogPayload` "Hello World #N" every 500 ms |
-| `bus-listener` | AF\_UNIX recv loop → dispatch to subscribers |
-| `sim-exec` | Steps through `MotorSequencePayload` in real time |
-| `sim-log` | Publishes kinematics status log every 1 000 ms |
-| `bridge-rx` | UDP recv → injects into MessageBus |
+| Thread | Purpose | Location |
+|---|---|---|
+| `main` | Entry point; waits on shutdown signal (futex wait) | `main.cpp` |
+| `heartbeat` | Publishes standard "Heartbeat" logs every 500ms | `main.cpp` |
+| `bus-listener` | Listens to AF_UNIX socket for message routing | `MessageBus` |
+| `bridge-rx` | Receives and injects UDP packets into the local bus | `UdpBridge` |
+| `sim-clock` | **100Hz Heartbeat**: Drives physics ticks for all services | `StateService` |
+| `log-worker` | Async processing: prints logs and publishes to bus | `LogService` |
 
 ---
 ---
