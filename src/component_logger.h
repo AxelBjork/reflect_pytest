@@ -4,7 +4,6 @@
 #include <cstdio>
 
 #include "core_msgs.h"
-#include "message_bus.h"
 #include "msg_base.h"
 
 namespace sil {

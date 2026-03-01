@@ -48,7 +48,6 @@ void StateService::clock_loop() {
 
     uint32_t cmd_id = 0;
     int16_t rpm = 0;
-    bool active = false;
 
     {
       std::lock_guard lk{mu_};

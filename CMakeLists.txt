@@ -4,8 +4,20 @@ project(reflect_pytest CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-add_compile_options(-fdiagnostics-color=always)
+
+# Time-report: -ftime-report
+add_compile_options(-fdiagnostics-color=always -Wall)
 set(CMAKE_BUILD_RPATH /usr/local/gcc-trunk/lib64)
+
+# ── Options ───────────────────────────────────────────────────────────────────
+option(SIL_OPTIMIZED "Build with -O3 and -flto for maximum performance" OFF)
+
+if(SIL_OPTIMIZED)
+    message(STATUS "SIL_OPTIMIZED is ON - Setting Release build type with LTO")
+    set(CMAKE_BUILD_TYPE Release)
+    add_compile_options(-O3 -flto -g)
+    add_link_options(-O3 -flto -g)
+endif()
 
 # ── IPC library ───────────────────────────────────────────────────────────────
 add_library(ipc STATIC
@@ -57,16 +69,3 @@ target_link_libraries(unit_tests PRIVATE ipc GTest::gtest_main)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests)
-
-
-# ── Options ───────────────────────────────────────────────────────────────────
-option(SIL_OPTIMIZED "Build with -O3 and -flto for maximum performance" OFF)
-
-if(SIL_OPTIMIZED)
-    message(STATUS "SIL_OPTIMIZED is ON - Setting Release build type with LTO")
-    set(CMAKE_BUILD_TYPE Release)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -g")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -O3 -flto -g")
-    # Assembly view
-    # objdump -d -C --no-show-raw-insn --no-addresses --demangle build/sil_app > build/sil_app.asm
-endif()

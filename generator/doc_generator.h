@@ -18,8 +18,8 @@
 
 #include "autonomous_msgs.h"
 #include "common.h"
-#include "message_bus.h"
 #include "core_msgs.h"
+#include "message_bus.h"
 #include "simulation_msgs.h"
 
 using namespace std::string_view_literals;
@@ -38,17 +38,9 @@ std::string cpp_type_name_str();
 // Component Sub/Pub Helpers
 // -------------------------------------------------------------------------------------------------
 
-template <MsgId Id>
-consteval bool contains_msg(ipc::MsgList<>) {
-  return false;
-}
-
-template <MsgId Id, MsgId First, MsgId... Rest>
-consteval bool contains_msg(ipc::MsgList<First, Rest...>) {
-  if constexpr (Id == First)
-    return true;
-  else
-    return contains_msg<Id>(ipc::MsgList<Rest...>{});
+template <MsgId Id, MsgId... Ids>
+consteval bool contains_msg(ipc::MsgList<Ids...>) {
+  return ((Id == Ids) || ...);
 }
 
 template <typename Component, MsgId Id>
@@ -366,8 +358,8 @@ struct doc_payload_or_void {
 };
 
 template <uint32_t Id>
-struct doc_payload_or_void<
-    Id, std::void_t<typename MessageTraits<static_cast<MsgId>(Id)>::Payload>> {
+struct doc_payload_or_void<Id,
+                           std::void_t<typename MessageTraits<static_cast<MsgId>(Id)>::Payload>> {
   using type = typename MessageTraits<static_cast<MsgId>(Id)>::Payload;
 };
 
@@ -713,16 +705,16 @@ void emit_graphviz_flow_dot(std::ostream& os) {
 
       if constexpr (std::is_same_v<Comp, ipc::UdpBridge>) {
         os << "    " << ub_id << " [\n"
-          << "      fillcolor=\"#0F766E\",\n"
-          << "      label=<<B><FONT POINT-SIZE=\"38\">" << html_escape(cname)
-          << "</FONT></B><BR/><FONT POINT-SIZE=\"26\">" << html_escape(desc_text) << "</FONT>>\n"
-          << "    ];\n";
+           << "      fillcolor=\"#0F766E\",\n"
+           << "      label=<<B><FONT POINT-SIZE=\"38\">" << html_escape(cname)
+           << "</FONT></B><BR/><FONT POINT-SIZE=\"26\">" << html_escape(desc_text) << "</FONT>>\n"
+           << "    ];\n";
       } else {
         os << "    " << dot_id(cname) << " [\n"
-          << "      fillcolor=\"#0369A1\",\n"
-          << "      label=<<B><FONT POINT-SIZE=\"30\">" << html_escape(cname)
-          << "</FONT></B><BR/><FONT POINT-SIZE=\"24\">" << html_escape(desc_text) << "</FONT>>\n"
-          << "    ];\n";
+           << "      fillcolor=\"#0369A1\",\n"
+           << "      label=<<B><FONT POINT-SIZE=\"30\">" << html_escape(cname)
+           << "</FONT></B><BR/><FONT POINT-SIZE=\"24\">" << html_escape(desc_text) << "</FONT>>\n"
+           << "    ];\n";
       }
     }());
   }(std::make_index_sequence<std::tuple_size_v<Components>>{});

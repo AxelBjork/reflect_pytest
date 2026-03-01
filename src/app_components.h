@@ -95,21 +95,28 @@ void dispatch_for_id(void* ctx, MsgId id, const void* payload) {
                                        std::make_index_sequence<std::tuple_size_v<Tuple>>{});
 }
 
-// Generate the array mapping 0..2048 to potentially valid dispatch_for_id template instantiations.
-template <typename Tuple, std::size_t... MsgIds>
-consteval auto make_dispatch_table(std::index_sequence<MsgIds...>) {
-  std::array<ipc::MessageBus::DispatchFn, sizeof...(MsgIds)> table{};
-  (..., (table[MsgIds] = has_subscribers<static_cast<MsgId>(MsgIds), Tuple>()
-                             ? &dispatch_for_id<static_cast<MsgId>(MsgIds), Tuple>
-                             : nullptr));
+static constexpr size_t K_MAX_MSG_ID = static_cast<size_t>(MsgId::RevisionResponse);
+
+template <MsgId... Msgs1, MsgId... Msgs2>
+consteval auto operator+(ipc::MsgList<Msgs1...>, ipc::MsgList<Msgs2...>) {
+  return ipc::MsgList<Msgs1..., Msgs2...>{};
+}
+
+template <typename Tuple, MsgId... Ids>
+consteval auto make_dispatch_table(ipc::MsgList<Ids...>) {
+  std::array<ipc::MessageBus::DispatchFn, K_MAX_MSG_ID + 1> table{};
+  (..., (table[static_cast<size_t>(Ids)] = &dispatch_for_id<static_cast<MsgId>(Ids), Tuple>));
   return table;
 }
 
-static constexpr size_t K_MAX_MSG_ID = static_cast<size_t>(MsgId::RevisionResponse);
+template <typename Tuple, std::size_t... Is>
+consteval auto get_all_subscribes(std::index_sequence<Is...>) {
+  return (typename std::tuple_element_t<Is, Tuple>::Subscribes{} + ...);
+}
 
 template <typename Tuple>
-constexpr auto dispatch_table =
-    make_dispatch_table<Tuple>(std::make_index_sequence<K_MAX_MSG_ID + 1>{});
+constexpr auto dispatch_table = make_dispatch_table<Tuple>(
+    get_all_subscribes<Tuple>(std::make_index_sequence<std::tuple_size_v<Tuple>>{}));
 
 template <typename Tuple>
 void static_dispatcher(void* ctx, MsgId id, const void* payload) {

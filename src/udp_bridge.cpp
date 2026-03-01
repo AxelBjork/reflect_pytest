@@ -1,5 +1,4 @@
 // ipc/udp_bridge.cpp
-#include "message_bus.h"
 
 #include "udp_bridge.h"
 

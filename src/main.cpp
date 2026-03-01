@@ -1,5 +1,4 @@
 // sil_app entry point.
-#include "message_bus.h"
 //
 // Threads:
 //   main         — waits on g_running (futex); zero CPU until signal
