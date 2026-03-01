@@ -5,7 +5,7 @@
 namespace sil {
 
 MotorService::MotorService(ipc::MessageBus& bus) : bus_(bus), logger_("motor") {
-  ipc::bind_subscriptions(bus, this);
+
 }
 
 void MotorService::on_message(const MotorSequencePayload& cmd) {

@@ -1,4 +1,5 @@
 // ipc/udp_bridge.cpp
+#include "message_bus.h"
 
 #include "udp_bridge.h"
 
@@ -47,14 +48,6 @@ UdpBridge::UdpBridge(MessageBus& bus) : bus_(bus) {
     ::close(udp_fd_);
     throw std::runtime_error("UdpBridge: pipe() failed");
   }
-
-  // Subscribe to outgoing messages — typed handlers serialize to UDP.
-  auto bind_udp = [this]<MsgId... Ids>(MsgList<Ids...>) {
-    (bus_.bus().subscribe<Ids>(
-         [this](const typename MessageTraits<Ids>::Payload& p) { forward_to_udp<Ids>(p); }),
-     ...);
-  };
-  bind_udp(Subscribes{});
 }
 
 void UdpBridge::start() {

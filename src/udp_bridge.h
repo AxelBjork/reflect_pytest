@@ -13,7 +13,7 @@
 #include <thread>
 
 #include "autonomous_msgs.h"
-#include "component.h"
+#include "publisher.h"
 #include "core_msgs.h"
 #include "simulation_msgs.h"
 
@@ -57,12 +57,18 @@ class DOC_DESC(
 
   bool is_connected() const;
 
-  UdpBridge(MessageBus& bus);
+  explicit UdpBridge(MessageBus& bus);
   ~UdpBridge();
 
   void start();
   UdpBridge(const UdpBridge&) = delete;
   UdpBridge& operator=(const UdpBridge&) = delete;
+
+  // Compile-time statically routed message handlers.
+  template <MsgId Id>
+  void on_message(const typename MessageTraits<Id>::Payload& p) {
+    forward_to_udp<Id>(p);
+  }
 
  private:
   TypedPublisher<UdpBridge> bus_;

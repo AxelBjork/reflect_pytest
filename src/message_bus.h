@@ -7,30 +7,22 @@
 // serves as a memory barrier for the handler map.
 
 #include <cstdint>
-#include <functional>
-#include <unordered_map>
-#include <vector>
 
 #include "msg_base.h"
+#include "publisher.h"
 
 namespace ipc {
 
 class MessageBus {
  public:
-  MessageBus() = default;
+  using DispatchFn = void (*)(void* ctx, MsgId id, const void* payload);
+
+  explicit MessageBus(void* ctx, DispatchFn dispatcher) : ctx_(ctx), dispatcher_(dispatcher) {
+  }
   ~MessageBus() = default;
 
   MessageBus(const MessageBus&) = delete;
   MessageBus& operator=(const MessageBus&) = delete;
-
-  // Subscribe to a specific message type.
-  // Must be called before any threads start publishing.
-  template <MsgId Id>
-  void subscribe(std::function<void(const typename MessageTraits<Id>::Payload&)> h) {
-    handlers_[static_cast<uint16_t>(Id)].push_back([h](const void* data) {
-      h(*static_cast<const typename MessageTraits<Id>::Payload*>(data));
-    });
-  }
 
   // Publish a typed message through the bus (lock-free).
   template <MsgId Id>
@@ -38,14 +30,40 @@ class MessageBus {
     dispatch(Id, &payload);
   }
 
-  // Allow TypedPublisher to access private methods if needed.
+  // Allow TypedPublisher to access private methods.
   template <typename T>
   friend class TypedPublisher;
 
  private:
-  std::unordered_map<uint16_t, std::vector<std::function<void(const void*)>>> handlers_;
+  void* const ctx_;
+  const DispatchFn dispatcher_;
 
   void dispatch(MsgId id, const void* payload);
 };
+
+namespace detail {
+
+template <MsgId... Ids>
+bool try_publish_raw(MessageBus& bus, MsgId id, const void* data, size_t size, MsgList<Ids...>) {
+  return ((id == Ids && size == sizeof(typename MessageTraits<Ids>::Payload) &&
+           [&] {
+             static_assert(std::is_trivially_copyable_v<typename MessageTraits<Ids>::Payload>);
+             typename MessageTraits<Ids>::Payload p;
+             std::memcpy(&p, data, sizeof(p));
+             bus.publish<Ids>(p);
+             return true;
+           }()) ||
+          ...);
+}
+
+}  // namespace detail
+
+template <typename Component>
+template <MsgId Id>
+void TypedPublisher<Component>::publish(const typename MessageTraits<Id>::Payload& payload) {
+  static_assert(detail::is_in_list_v<Id, typename Component::Publishes>,
+                "Message ID not found in Component::Publishes list!");
+  bus_.publish<Id>(payload);
+}
 
 }  // namespace ipc

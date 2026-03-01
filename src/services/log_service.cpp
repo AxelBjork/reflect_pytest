@@ -20,9 +20,8 @@ static constexpr const char* sev_str(Severity s) {
   return "?";
 }
 
-LogService::LogService(ipc::MessageBus& bus) : bus_(bus) {
+LogService::LogService(ipc::MessageBus& bus) : bus_(bus), logger_("log") {
   ComponentLogger::init(*this);
-  ipc::bind_subscriptions(bus_, this);
 }
 
 void LogService::start() {

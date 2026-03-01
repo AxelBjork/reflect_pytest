@@ -7,7 +7,7 @@
 namespace sil {
 
 RevisionService::RevisionService(ipc::MessageBus& bus) : bus_(bus) {
-  ipc::bind_subscriptions(bus, this);
+
 }
 
 void RevisionService::on_message(const RevisionRequestPayload& /*req*/) {

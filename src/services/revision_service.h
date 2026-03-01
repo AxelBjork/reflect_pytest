@@ -1,7 +1,7 @@
 #pragma once
 // services/revision_service.h
 
-#include "component.h"
+#include "publisher.h"
 #include "core_msgs.h"
 
 namespace sil {

@@ -3,16 +3,22 @@
 namespace sil {
 
 KinematicsService::KinematicsService(ipc::MessageBus& bus) : bus_(bus), logger_("kinematics") {
-  ipc::bind_subscriptions(bus_, this);
 }
 
 void KinematicsService::on_message(const PhysicsTickPayload& tick) {
   std::lock_guard lk{mu_};
   float dt_s = tick.dt_us / 1e6f;
-  speed_mps_ = tick.speed_rpm * K_RPM_TO_MPS;
-  position_m_ += speed_mps_ * dt_s;
+
+  float tick_speed = tick.speed_rpm * K_RPM_TO_MPS;
+  position_m_ += tick_speed * dt_s;
   elapsed_us_ += tick.dt_us;
   cmd_id_ = tick.cmd_id;
+
+  if (!active_) {
+    speed_mps_ = 0.0f;
+  } else {
+    speed_mps_ = tick_speed;
+  }
 
   // Log every 100 ticks (approx 1s)
   static uint32_t count = 0;
@@ -23,6 +29,7 @@ void KinematicsService::on_message(const PhysicsTickPayload& tick) {
 
 void KinematicsService::on_message(const MotorStatusPayload& ms) {
   std::lock_guard lk{mu_};
+  active_ = ms.is_active;
   if (ms.is_active && ms.cmd_id != cmd_id_) {
     // New sequence detected
     cmd_id_ = ms.cmd_id;

@@ -1,12 +1,12 @@
 #pragma once
 #include <condition_variable>
 #include <mutex>
+#include "component_logger.h"
 #include <queue>
 #include <thread>
 
-#include "component.h"
 #include "core_msgs.h"
-#include "message_bus.h"
+#include "publisher.h"
 #include "msg_base.h"
 
 namespace sil {
@@ -31,7 +31,8 @@ class DOC_DESC(
   void log(const LogPayload& p);
 
  private:
-  ipc::MessageBus& bus_;
+  ipc::TypedPublisher<LogService> bus_;
+  ComponentLogger logger_;
   std::mutex mu_;
   std::condition_variable cv_;
   std::thread worker_thread_;

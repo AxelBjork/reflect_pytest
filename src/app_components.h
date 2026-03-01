@@ -55,13 +55,83 @@ using AppServices = std::tuple<MotorService, KinematicsService, PowerService, St
                                ThermalService, EnvironmentService, AutonomousService, SensorService,
                                RevisionService, LogService, ipc::UdpBridge>;
 
+namespace detail {
+
+// Check if a service consumes this MsgId.
+template <MsgId Target, typename Component>
+constexpr bool consumes() {
+  return ipc::detail::is_in_list_v<Target, typename Component::Subscribes>;
+}
+
+// Check if ANY service consumes this MsgId.
+template <MsgId Target, typename Tuple>
+constexpr bool has_subscribers() {
+  return []<std::size_t... Is>(std::index_sequence<Is...>) {
+    return (consumes<Target, std::tuple_element_t<Is, Tuple>>() || ...);
+  }(std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+// Generate an inline handler that calls on_message for any matching service in the Tuple.
+template <typename Tuple, MsgId target_id, std::size_t... Is>
+void maybe_dispatch_to_services(void* tuple_ptr, const void* payload, std::index_sequence<Is...>) {
+  auto* services = static_cast<Tuple*>(tuple_ptr);
+  (..., [&]() {
+    using SvcType = std::tuple_element_t<Is, Tuple>;
+    if constexpr (consumes<target_id, SvcType>()) {
+      auto& svc = std::get<Is>(*services);
+      const auto& p = *static_cast<const typename MessageTraits<target_id>::Payload*>(payload);
+      if constexpr (requires { svc.template on_message<target_id>(p); }) {
+        svc.template on_message<target_id>(p);
+      } else {
+        svc.on_message(p);
+      }
+    }
+  }());
+}
+
+template <MsgId I, typename Tuple>
+void dispatch_for_id(void* ctx, MsgId id, const void* payload) {
+  maybe_dispatch_to_services<Tuple, I>(ctx, payload,
+                                       std::make_index_sequence<std::tuple_size_v<Tuple>>{});
+}
+
+// Generate the array mapping 0..2048 to potentially valid dispatch_for_id template instantiations.
+template <typename Tuple, std::size_t... MsgIds>
+consteval auto make_dispatch_table(std::index_sequence<MsgIds...>) {
+  std::array<ipc::MessageBus::DispatchFn, sizeof...(MsgIds)> table{};
+  (..., (table[MsgIds] = has_subscribers<static_cast<MsgId>(MsgIds), Tuple>()
+                             ? &dispatch_for_id<static_cast<MsgId>(MsgIds), Tuple>
+                             : nullptr));
+  return table;
+}
+
+static constexpr size_t K_MAX_MSG_ID = static_cast<size_t>(MsgId::RevisionResponse);
+
+template <typename Tuple>
+constexpr auto dispatch_table =
+    make_dispatch_table<Tuple>(std::make_index_sequence<K_MAX_MSG_ID + 1>{});
+
+template <typename Tuple>
+void static_dispatcher(void* ctx, MsgId id, const void* payload) {
+  auto index = static_cast<size_t>(id);
+  if (index <= K_MAX_MSG_ID) {
+    if (auto fn = dispatch_table<Tuple>[index]) {
+      fn(ctx, id, payload);
+    }
+  }
+}
+
+}  // namespace detail
+
 template <typename... Ts>
 struct AppServicesContainer {
   ipc::MessageBus bus;
   std::tuple<Ts...> services;
 
-  AppServicesContainer() : bus(), services(((void)sizeof(Ts), std::ref(bus))...) {
-    // Phase 1: All constructors are finished (all subscriptions registered).
+  AppServicesContainer()
+      : bus(&services, &detail::static_dispatcher<decltype(services)>),
+        services(((void)sizeof(Ts), std::ref(bus))...) {
+    // Phase 1: All constructors are finished.
     // Phase 2: Start background threads. Thread start provides memory barrier.
     detail::start_all_services(services, std::index_sequence_for<Ts...>{});
   }

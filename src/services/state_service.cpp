@@ -7,7 +7,7 @@ namespace sil {
 static constexpr uint32_t kTickUs = 10'000;  // 100Hz
 
 StateService::StateService(ipc::MessageBus& bus) : bus_(bus), logger_("state") {
-  ipc::bind_subscriptions(bus, this);
+
 }
 
 void StateService::start() {

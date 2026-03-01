@@ -2,10 +2,9 @@
 #include <mutex>
 
 #include "autonomous_msgs.h"
-#include "component.h"
+#include "publisher.h"
 #include "component_logger.h"
 #include "core_msgs.h"
-#include "message_bus.h"
 #include "simulation_msgs.h"
 
 namespace sil {
@@ -41,7 +40,7 @@ class DOC_DESC(
   void publish_data();
 
  private:
-  ipc::MessageBus& bus_;
+  ipc::TypedPublisher<ThermalService> bus_;
   ComponentLogger logger_;
   std::mutex mu_;
 

@@ -8,10 +8,42 @@
 
 using namespace ipc;
 
+class TestBusWrapper {
+ public:
+  TestBusWrapper() : bus_(this, &dispatch_fn) {
+  }
+
+  template <MsgId Id>
+  void subscribe(std::function<void(const typename MessageTraits<Id>::Payload&)> h) {
+    handlers_[static_cast<uint16_t>(Id)].push_back([h](const void* data) {
+      h(*static_cast<const typename MessageTraits<Id>::Payload*>(data));
+    });
+  }
+
+  template <MsgId Id>
+  void publish(const typename MessageTraits<Id>::Payload& payload) {
+    bus_.publish<Id>(payload);
+  }
+
+ private:
+  std::unordered_map<uint16_t, std::vector<std::function<void(const void*)>>> handlers_;
+  MessageBus bus_;
+
+  static void dispatch_fn(void* ctx, MsgId id, const void* payload) {
+    auto* self = static_cast<TestBusWrapper*>(ctx);
+    auto it = self->handlers_.find(static_cast<uint16_t>(id));
+    if (it != self->handlers_.end()) {
+      for (auto& h : it->second) {
+        h(payload);
+      }
+    }
+  }
+};
+
 // ── Test: single MotorSequence round-trip ────────────────────────────────────
 
 TEST(MessageBus, MotorCmdRoundTrip) {
-  MessageBus bus;
+  TestBusWrapper bus;
 
   ::MotorSequencePayload sent{};
   sent.cmd_id = 1;
@@ -37,7 +69,7 @@ TEST(MessageBus, MotorCmdRoundTrip) {
 // ── Test: multiple subscribers receive the same message ─────────────────────
 
 TEST(MessageBus, MultiSubscriberFanout) {
-  MessageBus bus;
+  TestBusWrapper bus;
 
   int count_a = 0, count_b = 0;
 
@@ -54,7 +86,7 @@ TEST(MessageBus, MultiSubscriberFanout) {
 // ── Test: unrelated subscribers are not invoked ─────────────────────────────
 
 TEST(MessageBus, NoSideDispatch) {
-  MessageBus bus;
+  TestBusWrapper bus;
 
   bool wrong_called = false;
   bus.subscribe<MsgId::PowerRequest>([&](const ::PowerRequestPayload&) { wrong_called = true; });
@@ -68,7 +100,7 @@ TEST(MessageBus, NoSideDispatch) {
 // ── Test: simple dispatch check ──────────────────────────────────
 
 TEST(MessageBus, BasicDispatch) {
-  MessageBus bus;
+  TestBusWrapper bus;
 
   int count = 0;
   bus.subscribe<MsgId::StateData>([&](const ::StatePayload&) { ++count; });

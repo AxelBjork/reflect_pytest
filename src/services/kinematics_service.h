@@ -1,10 +1,9 @@
 #pragma once
 #include <mutex>
 
-#include "component.h"
+#include "publisher.h"
 #include "component_logger.h"
 #include "core_msgs.h"
-#include "message_bus.h"
 #include "simulation_msgs.h"
 
 namespace sil {
@@ -30,7 +29,7 @@ class DOC_DESC(
   void on_message(const KinematicsRequestPayload& req);
 
  private:
-  ipc::MessageBus& bus_;
+  ipc::TypedPublisher<KinematicsService> bus_;
   ComponentLogger logger_;
   std::mutex mu_;
 
@@ -38,6 +37,7 @@ class DOC_DESC(
   uint32_t elapsed_us_{0};
   float position_m_{0.0f};
   float speed_mps_{0.0f};
+  bool active_{false};
 };
 
 }  // namespace sil

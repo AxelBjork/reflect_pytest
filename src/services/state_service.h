@@ -4,10 +4,9 @@
 #include <mutex>
 #include <thread>
 
-#include "component.h"
 #include "component_logger.h"
 #include "core_msgs.h"
-#include "message_bus.h"
+#include "publisher.h"
 #include "msg_base.h"
 #include "simulation_msgs.h"
 

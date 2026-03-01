@@ -7,7 +7,7 @@
 namespace sil {
 
 SensorService::SensorService(ipc::MessageBus& bus) : bus_(bus), logger_("sensor") {
-  ipc::bind_subscriptions(bus_, this);
+
 }
 
 void SensorService::on_message(const StatePayload& state_msg) {

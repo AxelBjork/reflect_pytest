@@ -5,7 +5,7 @@
 namespace sil {
 
 ThermalService::ThermalService(ipc::MessageBus& bus) : bus_(bus), logger_("thermal") {
-  ipc::bind_subscriptions(bus_, this);
+
 }
 
 void ThermalService::on_message(const PhysicsTickPayload& tick) {

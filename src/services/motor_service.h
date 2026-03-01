@@ -1,7 +1,7 @@
 #pragma once
 #include <mutex>
 
-#include "component.h"
+#include "publisher.h"
 #include "component_logger.h"
 #include "core_msgs.h"
 #include "simulation_msgs.h"

@@ -4,10 +4,9 @@
 #include <vector>
 
 #include "autonomous_msgs.h"
-#include "component.h"
+#include "publisher.h"
 #include "component_logger.h"
 #include "core_msgs.h"
-#include "message_bus.h"
 #include "simulation_msgs.h"
 
 namespace sil {
@@ -36,7 +35,7 @@ class DOC_DESC(
  private:
   void publish_motor_sequence_for_current_node();
 
-  ipc::MessageBus& bus_;
+  ipc::TypedPublisher<AutonomousService> bus_;
   ComponentLogger logger_;
   std::recursive_mutex mu_;
 

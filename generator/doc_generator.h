@@ -18,7 +18,7 @@
 
 #include "autonomous_msgs.h"
 #include "common.h"
-#include "component.h"
+#include "message_bus.h"
 #include "core_msgs.h"
 #include "simulation_msgs.h"
 

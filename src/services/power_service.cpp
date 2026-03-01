@@ -6,19 +6,26 @@
 namespace sil {
 
 PowerService::PowerService(ipc::MessageBus& bus) : bus_(bus), logger_("power") {
-  ipc::bind_subscriptions(bus_, this);
 }
 
 void PowerService::on_message(const PhysicsTickPayload& tick) {
   std::lock_guard lk{mu_};
   float dt_s = tick.dt_us / 1e6f;
+
   float rpm_abs = std::abs(static_cast<float>(tick.speed_rpm));
-  current_a_ = I_IDLE_A + K_RPM_POW_TO_AMPS * std::pow(rpm_abs, RPM_EXP_P);
-  float dv = current_a_ * R_INT_OHM * dt_s;
+  float tick_current = I_IDLE_A + K_RPM_POW_TO_AMPS * std::pow(rpm_abs, RPM_EXP_P);
+
+  float dv = tick_current * R_INT_OHM * dt_s;
   voltage_v_ = std::max(V_MIN, voltage_v_ - dv);
   soc_ = static_cast<uint8_t>(
       std::clamp((voltage_v_ - V_MIN) / (V_MAX - V_MIN) * 100.0f, 0.0f, 100.0f));
   cmd_id_ = tick.cmd_id;
+
+  if (!active_) {
+    current_a_ = I_IDLE_A;
+  } else {
+    current_a_ = tick_current;
+  }
 
   // Log every 100 ticks (approx 1s)
   static uint32_t count = 0;
@@ -30,8 +37,9 @@ void PowerService::on_message(const PhysicsTickPayload& tick) {
 void PowerService::on_message(const MotorStatusPayload& ms) {
   std::lock_guard lk{mu_};
   cmd_id_ = ms.cmd_id;
+  active_ = ms.is_active;
   if (!ms.is_active) {
-    current_a_ = 0.0f;
+    current_a_ = I_IDLE_A;
   }
 }
 

@@ -1,10 +1,9 @@
 #pragma once
 #include <mutex>
 
-#include "component.h"
+#include "publisher.h"
 #include "component_logger.h"
 #include "core_msgs.h"
-#include "message_bus.h"
 #include "simulation_msgs.h"
 
 namespace sil {
@@ -36,7 +35,7 @@ class DOC_DESC(
   void on_message(const PowerRequestPayload& req);
 
  private:
-  ipc::MessageBus& bus_;
+  ipc::TypedPublisher<PowerService> bus_;
   ComponentLogger logger_;
   std::mutex mu_;
 
@@ -44,6 +43,7 @@ class DOC_DESC(
   float voltage_v_{V_MAX};
   float current_a_{0.0f};
   uint8_t soc_{100};
+  bool active_{false};
 };
 
 }  // namespace sil

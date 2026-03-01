@@ -5,7 +5,7 @@
 namespace sil {
 
 AutonomousService::AutonomousService(ipc::MessageBus& bus) : bus_(bus), logger_("auto") {
-  ipc::bind_subscriptions(bus_, this);
+
 }
 
 void AutonomousService::on_message(const AutoDriveCommandPayload& cmd) {

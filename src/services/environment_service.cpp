@@ -5,7 +5,7 @@
 namespace sil {
 
 EnvironmentService::EnvironmentService(ipc::MessageBus& bus) : bus_(bus), logger_("env") {
-  ipc::bind_subscriptions(bus_, this);
+
 }
 
 void EnvironmentService::on_message(const EnvironmentPayload& env) {
