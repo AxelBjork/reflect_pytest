@@ -56,6 +56,8 @@ Efficiency is prioritized for internal C++ communication. However, crossing the 
 2. **Internal Ref-Counting**: For heavy-duty data like `InternalEnvData` (which contains large arrays or complex structs), we use `std::shared_ptr`. The `MessageBus` simply passes the pointer, ensuring that only the pointer and ref-count are copied within the C++ process.
 3. **Contiguous Layout**: Message payloads are designed as standard-layout structs where possible, making the serialization/deserialization step in `UdpBridge` a single `memcpy` operation.
 
+For an detailed dive into exactly what the compiler does under `-O3 -flto`, see the [Send Path Assembly Analysis](send_path_lto_analysis.md).
+
 ## Network Transport
 - **Protocol**: UDP
 - **Rationale**: Low latency and no head-of-line blocking. Perfect for 100Hz real-time simulation where a late packet is of less value than the latest packet.

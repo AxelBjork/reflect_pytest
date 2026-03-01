@@ -38,10 +38,16 @@ def pytest_addoption(parser):
         help="Run CMake configure, build, and CTest before the pytest suite.",
     )
     parser.addoption(
+        "--build-opt",
+        action="store_true",
+        default=False,
+        help="Run CMake configure, build, and CTest with -O3 -flto.",
+    )
+    parser.addoption(
         "--build-only",
         action="store_true",
         default=False,
-        help="Run C++ build and CTest, then exit without running Python " "tests.",
+        help="Run C++ build and CTest, then exit without running Python tests.",
     )
     parser.addoption(
         "--simulator",
@@ -66,12 +72,19 @@ def pytest_sessionstart(session):
     if traffic_log.exists():
         traffic_log.unlink()
 
-    if config.getoption("--build") or config.getoption("--build-only"):
+    if config.getoption("--build") or config.getoption("--build-only") or config.getoption("--build-opt"):
         print("\n[pytest] Orchestrating C++ build and CTest...")
+
+        cmake_cmd = ["cmake", "-B", str(_BUILD_DIR), "-G", "Ninja"]
+        if config.getoption("--build-opt"):
+            cmake_cmd.append("-DSIL_OPTIMIZED=ON")
+        else:
+            cmake_cmd.append("-DSIL_OPTIMIZED=OFF")
+
         try:
             # 1. CMake Configure
             subprocess.run(
-                ["cmake", "-B", str(_BUILD_DIR), "-G", "Ninja"],
+                cmake_cmd,
                 cwd=_REPO_ROOT,
                 check=True,
             )

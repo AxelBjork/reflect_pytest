@@ -40,9 +40,7 @@ void start_all_services(Tuple& services, std::index_sequence<Is...>) {
 }  // namespace detail
 
 /**
- * @warning CRITICAL: DO NOT MODIFY THIS FILE OR THE AppServicesContainer.
- *
- * All services must conform to the standard constructor signature:
+ * @warning: All services must conform to the standard constructor signature:
  *   Service(ipc::MessageBus& bus)
  *
  * Inter-service communication should happen via the ipc::MessageBus to

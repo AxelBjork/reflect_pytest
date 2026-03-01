@@ -8,9 +8,7 @@
 #include <netinet/in.h>
 
 #include <cstring>
-#include <mutex>
 #include <thread>
-#include <vector>
 
 #include "autonomous_msgs.h"
 #include "component.h"
@@ -38,6 +36,8 @@ class DOC_DESC(
 
   static constexpr uint16_t kDefaultPort = 9000;
 
+  static bool is_connected();
+
   UdpBridge(MessageBus& bus);
   ~UdpBridge();
 
@@ -51,26 +51,24 @@ class DOC_DESC(
   int wake_[2];
   std::thread rx_thread_;
 
-  std::mutex peer_mu_;
   struct sockaddr_in peer_{};
-  bool peer_valid_{false};
 
   void rx_loop();
 
   // Serialize a typed payload to wire format and send via UDP.
-  template <MsgId Id>
-  void forward_to_udp(const typename MessageTraits<Id>::Payload& payload) {
-    std::lock_guard lk(peer_mu_);
-    if (!peer_valid_) return;
+  // Performs zero dynamic allocations and is lock-free.
+  template <MsgId Id, typename Payload>
+  void forward_to_udp(const Payload& payload) {
+    if (!is_connected()) return;
 
-    constexpr size_t psize = sizeof(typename MessageTraits<Id>::Payload);
-    std::vector<uint8_t> buf(sizeof(uint16_t) + psize);
-    uint16_t id = static_cast<uint16_t>(Id);
-    std::memcpy(buf.data(), &id, sizeof(id));
-    std::memcpy(buf.data() + sizeof(uint16_t), &payload, psize);
+    constexpr size_t total_size = sizeof(uint16_t) + sizeof(Payload);
+    uint8_t buf[total_size];
 
-    ::sendto(udp_fd_, buf.data(), buf.size(), 0, reinterpret_cast<const sockaddr*>(&peer_),
-             sizeof(peer_));
+    uint16_t id_raw = static_cast<uint16_t>(Id);
+    std::memcpy(buf, &id_raw, sizeof(uint16_t));
+    std::memcpy(buf + sizeof(uint16_t), &payload, sizeof(Payload));
+
+    ::sendto(udp_fd_, buf, total_size, 0, reinterpret_cast<sockaddr*>(&peer_), sizeof(peer_));
   }
 };
 

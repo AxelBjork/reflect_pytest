@@ -57,3 +57,16 @@ target_link_libraries(unit_tests PRIVATE ipc GTest::gtest_main)
 
 include(GoogleTest)
 gtest_discover_tests(unit_tests)
+
+
+# ── Options ───────────────────────────────────────────────────────────────────
+option(SIL_OPTIMIZED "Build with -O3 and -flto for maximum performance" OFF)
+
+if(SIL_OPTIMIZED)
+    message(STATUS "SIL_OPTIMIZED is ON - Setting Release build type with LTO")
+    set(CMAKE_BUILD_TYPE Release)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -g")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -O3 -flto -g")
+    # Assembly view
+    # objdump -d --no-show-raw-insn --demangle build/sil_app > ./sil_app_verify.s
+endif()
