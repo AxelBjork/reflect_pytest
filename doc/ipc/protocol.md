@@ -117,6 +117,10 @@ The service accepts an AutoDriveCommand containing a list of ManeuverNodes (1D x
 
 Simulates reading from physical terrain maps with a 10us delay.
 
+### `RevisionService`
+
+> Provides runtime verification of the compiled IPC protocol hash.
+
 ### `LogService`
 
 > Asynchronous logging sink.
@@ -1322,6 +1326,58 @@ _No fields._
       <td>int</td>
       <td>1</td>
       <td>5</td>
+    </tr>
+  </tbody>
+</table>
+
+</details>
+
+<details>
+<summary><font size="+1"><b>MsgId::RevisionRequest (RevisionRequestPayload)</b></font></summary>
+
+> Request the current system revision and protocol hash.
+
+**Direction:** `Inbound`<br>
+**Subscribes:** `RevisionService`<br>
+**Wire size:** 1 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>reserved</td>
+      <td>uint8_t</td>
+      <td>int</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+</details>
+
+<details>
+<summary><font size="+1"><b>MsgId::RevisionResponse (RevisionResponsePayload)</b></font></summary>
+
+> Response containing the system revision and protocol hash.
+
+**Direction:** `Outbound`<br>
+**Publishes:** `RevisionService`<br>
+**Wire size:** 65 bytes
+
+<table>
+  <thead>
+    <tr><th>Field</th><th>C++ Type</th><th>Py Type</th><th>Bytes</th><th>Offset</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>protocol_hash</td>
+      <td>char[65]</td>
+      <td>bytes</td>
+      <td>65</td>
+      <td>0</td>
     </tr>
   </tbody>
 </table>

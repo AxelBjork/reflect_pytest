@@ -10,6 +10,7 @@
 #include "services/log_service.h"
 #include "services/motor_service.h"
 #include "services/power_service.h"
+#include "services/revision_service.h"
 #include "services/sensor_service.h"
 #include "services/state_service.h"
 #include "services/thermal_service.h"
@@ -52,9 +53,9 @@ void start_all_services(Tuple& services, std::index_sequence<Is...>) {
 // A compile-time list of all services instantiated by the main application.
 // This is also used by the documentation generator to automatically reflect over
 // the aggregate Subscribes/Publishes traits of the entire application.
-using AppServices =
-    std::tuple<MotorService, KinematicsService, PowerService, StateService, ThermalService,
-               EnvironmentService, AutonomousService, SensorService, LogService, ipc::UdpBridge>;
+using AppServices = std::tuple<MotorService, KinematicsService, PowerService, StateService,
+                               ThermalService, EnvironmentService, AutonomousService, SensorService,
+                               RevisionService, LogService, ipc::UdpBridge>;
 
 template <typename... Ts>
 struct AppServicesContainer {

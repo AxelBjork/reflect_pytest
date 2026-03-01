@@ -30,6 +30,7 @@ add_executable(sil_app
     src/services/autonomous_service.cpp
     src/services/log_service.cpp
     src/services/sensor_service.cpp
+    src/services/revision_service.cpp
 )
 target_link_libraries(sil_app PRIVATE ipc)
 

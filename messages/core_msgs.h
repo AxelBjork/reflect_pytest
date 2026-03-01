@@ -3,7 +3,6 @@
 
 #include "msg_base.h"
 
-
 struct DOC_DESC(
     "Unidirectional log/trace message. Emitted by any component at any time; "
     "Python receives these passively from the bus.") LogPayload {
@@ -22,6 +21,15 @@ struct DOC_DESC(
     "State machine snapshot. "
     "Carries the current coarse lifecycle SystemState.") StatePayload {
   SystemState state;
+};
+
+struct DOC_DESC("Request the current system revision and protocol hash.") RevisionRequestPayload {
+  uint8_t reserved;
+};
+
+struct DOC_DESC("Response containing the system revision and protocol hash.")
+    RevisionResponsePayload {
+  char protocol_hash[65];  // 64 hex characters + null terminator string
 };
 
 struct DOC_DESC(
@@ -48,6 +56,18 @@ template <>
 struct MessageTraits<MsgId::StateData> {
   using Payload = StatePayload;
   static constexpr std::string_view name = "StateData";
+};
+
+template <>
+struct MessageTraits<MsgId::RevisionRequest> {
+  using Payload = RevisionRequestPayload;
+  static constexpr std::string_view name = "RevisionRequest";
+};
+
+template <>
+struct MessageTraits<MsgId::RevisionResponse> {
+  using Payload = RevisionResponsePayload;
+  static constexpr std::string_view name = "RevisionResponse";
 };
 
 template <>

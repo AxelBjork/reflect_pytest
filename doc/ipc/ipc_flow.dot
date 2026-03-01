@@ -78,6 +78,10 @@ digraph IPC {
       fillcolor="#0369A1",
       label=<<B><FONT POINT-SIZE="30">SensorService</FONT></B><BR/><FONT POINT-SIZE="24">Sensor service that procedurally<BR/>generates environment data based on<BR/>requested locations.</FONT>>
     ];
+    RevisionService [
+      fillcolor="#0369A1",
+      label=<<B><FONT POINT-SIZE="30">RevisionService</FONT></B><BR/><FONT POINT-SIZE="24">Provides runtime verification of the<BR/>compiled IPC protocol hash.</FONT>>
+    ];
     LogService [
       fillcolor="#0369A1",
       label=<<B><FONT POINT-SIZE="30">LogService</FONT></B><BR/><FONT POINT-SIZE="24">Asynchronous logging sink.</FONT>>
@@ -129,7 +133,7 @@ digraph IPC {
   }
 
   TestCase -> TX [label="send_msg", color="#F1F5F9", penwidth=5];
-  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nKinematicsData, KinematicsRequest\nMotorSequence, PowerData\nPowerRequest, SensorRequest\nStateData, StateRequest\nThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
+  TX -> UdpBridge [label="Inbound Traffic:\nAutoDriveCommand, EnvironmentData\nKinematicsData, KinematicsRequest\nMotorSequence, PowerData\nPowerRequest, RevisionRequest\nSensorRequest, StateData\nStateRequest, ThermalRequest", color="#F1F5F9", penwidth=5, fontsize=25];
 
   // Internal Simulator Logic
   AutonomousService -> EnvironmentService [label="InternalEnvRequest", style=dashed];
@@ -142,6 +146,7 @@ digraph IPC {
   MotorService -> PowerService [label="MotorStatus", style=dashed];
   MotorService -> StateService [label="MotorStatus", style=dashed];
   PowerService -> UdpBridge [label="PowerData", style=dashed];
+  RevisionService -> UdpBridge [label="RevisionResponse", style=dashed];
   SensorService -> UdpBridge [label="EnvironmentData, SensorAck", style=dashed];
   StateService -> AutonomousService [label="PhysicsTick", style=dashed];
   StateService -> KinematicsService [label="PhysicsTick", style=dashed];
@@ -155,11 +160,12 @@ digraph IPC {
   UdpBridge -> KinematicsService [label="KinematicsRequest", style=dashed];
   UdpBridge -> MotorService [label="MotorSequence", style=dashed];
   UdpBridge -> PowerService [label="PowerRequest", style=dashed];
+  UdpBridge -> RevisionService [label="RevisionRequest", style=dashed];
   UdpBridge -> SensorService [label="SensorRequest, StateData", style=dashed];
   UdpBridge -> StateService [label="StateRequest", style=dashed];
   UdpBridge -> ThermalService [label="EnvironmentData, ThermalRequest", style=dashed];
 
   // Flow: Simulator -> Network -> Test Harness
-  RX -> UdpBridge [label="Outbound Traffic:\nAutoDriveStatus, EnvironmentAck\nEnvironmentData, EnvironmentRequest\nKinematicsData, KinematicsRequest\nLog, MotorSequence\nPowerData, PowerRequest\nSensorAck, StateData\nThermalData", color="#F1F5F9", penwidth=5, dir=back, fontsize=25, arrowtail=normal];
+  RX -> UdpBridge [label="Outbound Traffic:\nAutoDriveStatus, EnvironmentAck\nEnvironmentData, EnvironmentRequest\nKinematicsData, KinematicsRequest\nLog, MotorSequence\nPowerData, PowerRequest\nRevisionResponse, SensorAck\nStateData, ThermalData", color="#F1F5F9", penwidth=5, dir=back, fontsize=25, arrowtail=normal];
   TestCase -> RX [label="recv_msg", color="#F1F5F9", penwidth=5, dir=back, arrowtail=normal];
 }

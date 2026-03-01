@@ -27,6 +27,8 @@ class MsgId(IntEnum):
     InternalEnvData = 1001
     SensorRequest = 1100
     SensorAck = 1101
+    RevisionRequest = 2000
+    RevisionResponse = 2001
 
 class Severity(IntEnum):
     Debug = 0
@@ -705,6 +707,42 @@ class SensorAckPayload:
         offset += struct.calcsize("<I?B2x")
         return cls(request_id=request_id, success=success, reason=reason)
 
+@dataclass
+class RevisionRequestPayload:
+    """Request the current system revision and protocol hash."""
+    WIRE_SIZE = 1
+    reserved: int
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<B", self.reserved))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "RevisionRequestPayload":
+        offset = 0
+        reserved = struct.unpack_from("<B", data, offset)[0]
+        offset += struct.calcsize("<B")
+        return cls(reserved=reserved)
+
+@dataclass
+class RevisionResponsePayload:
+    """Response containing the system revision and protocol hash."""
+    WIRE_SIZE = 65
+    protocol_hash: bytes
+
+    def pack_wire(self) -> bytes:
+        data = bytearray()
+        data.extend(struct.pack("<65s", self.protocol_hash))
+        return bytes(data)
+
+    @classmethod
+    def unpack_wire(cls, data: bytes) -> "RevisionResponsePayload":
+        offset = 0
+        protocol_hash = struct.unpack_from("<65s", data, offset)[0]
+        offset += struct.calcsize("<65s")
+        return cls(protocol_hash=protocol_hash)
+
 MESSAGE_BY_ID = {
     MsgId.Log: LogPayload,
     MsgId.PhysicsTick: PhysicsTickPayload,
@@ -727,6 +765,8 @@ MESSAGE_BY_ID = {
     MsgId.InternalEnvData: InternalEnvDataPayload,
     MsgId.SensorRequest: SensorRequestPayload,
     MsgId.SensorAck: SensorAckPayload,
+    MsgId.RevisionRequest: RevisionRequestPayload,
+    MsgId.RevisionResponse: RevisionResponsePayload,
 }
 
 PAYLOAD_SIZE_BY_ID = {
@@ -751,5 +791,9 @@ PAYLOAD_SIZE_BY_ID = {
     MsgId.InternalEnvData: 16,
     MsgId.SensorRequest: 8,
     MsgId.SensorAck: 8,
+    MsgId.RevisionRequest: 1,
+    MsgId.RevisionResponse: 65,
 }
+
+PROTOCOL_HASH = "2461d778852d3817"
 

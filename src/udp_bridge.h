@@ -30,10 +30,11 @@ class DOC_DESC(
  public:
   using Subscribes = MsgList<MsgId::Log, MsgId::StateData, MsgId::KinematicsData, MsgId::PowerData,
                              MsgId::ThermalData, MsgId::EnvironmentAck, MsgId::AutoDriveStatus,
-                             MsgId::EnvironmentRequest, MsgId::EnvironmentData, MsgId::SensorAck>;
+                             MsgId::EnvironmentRequest, MsgId::EnvironmentData, MsgId::SensorAck,
+                             MsgId::RevisionResponse>;
   using Publishes = MsgList<MsgId::StateRequest, MsgId::MotorSequence, MsgId::KinematicsRequest,
                             MsgId::PowerRequest, MsgId::ThermalRequest, MsgId::AutoDriveCommand,
-                            MsgId::EnvironmentData, MsgId::SensorRequest>;
+                            MsgId::EnvironmentData, MsgId::SensorRequest, MsgId::RevisionRequest>;
 
   static constexpr uint16_t kDefaultPort = 9000;
 

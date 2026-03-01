@@ -62,6 +62,10 @@ enum class DOC_DESC("Top-level message type selector. The uint16_t wire value is
   // SensorService messages
   SensorRequest = 1100,
   SensorAck = 1101,
+
+  // Application / Infrastructure messages
+  RevisionRequest = 2000,
+  RevisionResponse = 2001,
 };
 
 /**
