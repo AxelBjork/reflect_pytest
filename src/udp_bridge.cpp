@@ -16,13 +16,13 @@
 
 namespace ipc {
 
-namespace {
-alignas(64) std::atomic<bool> g_peer_valid{false};
-}  // namespace
-
-bool UdpBridge::is_connected() {
-  return g_peer_valid.load(std::memory_order_acquire);
+bool UdpBridge::is_connected() const {
+  PeerAddress peer_val = active_peer_.load(std::memory_order_acquire);
+  return static_cast<bool>(peer_val);
 }
+
+static_assert(std::is_trivially_copyable_v<PeerAddress>);
+static_assert(std::atomic<PeerAddress>::is_always_lock_free);
 
 static constexpr size_t kMaxDgram = 4096;
 
@@ -72,6 +72,7 @@ UdpBridge::~UdpBridge() {
 
 void UdpBridge::rx_loop() {
   uint8_t buf[kMaxDgram];
+  PeerAddress current_peer{0, 0, 0};
 
   while (true) {
     fd_set fds;
@@ -93,14 +94,10 @@ void UdpBridge::rx_loop() {
           ::recvfrom(udp_fd_, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&sender), &slen);
       if (n < 0) continue;
 
-      // Update the peer address if it changed. By only doing this on mismatch,
-      // we avoid data races and cache line bouncing during steady-state test execution.
-      bool new_peer = peer_.sin_addr.s_addr != sender.sin_addr.s_addr || peer_.sin_port != sender.sin_port;
-
-      if (new_peer) {
-        g_peer_valid.store(false, std::memory_order_release);
-        peer_ = sender;
-        g_peer_valid.store(true, std::memory_order_release);
+      PeerAddress sender_val{sender.sin_addr.s_addr, sender.sin_port, 0};
+      if (current_peer != sender_val) {
+        current_peer = sender_val;
+        active_peer_.store(current_peer, std::memory_order_release);
       }
 
       // Inject valid datagrams (>= 2 bytes for msgId) into the bus.

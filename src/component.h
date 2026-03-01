@@ -24,9 +24,6 @@ template <MsgId Target, MsgId First, MsgId... Rest>
 struct MsgContains<Target, First, Rest...>
     : std::conditional_t<Target == First, std::true_type, MsgContains<Target, Rest...>> {};
 
-template <MsgId Target, MsgId... Ids>
-constexpr bool msg_in_list_v = MsgContains<Target, Ids...>::value;
-
 template <MsgId Target, typename List>
 struct IsInList;
 
@@ -52,7 +49,8 @@ template <MsgId... Ids>
 bool try_publish_raw(MessageBus& bus, MsgId id, const void* data, size_t size, MsgList<Ids...>) {
   return ((id == Ids && size == sizeof(typename MessageTraits<Ids>::Payload) &&
            [&] {
-             typename MessageTraits<Ids>::Payload p{};
+             static_assert(std::is_trivially_copyable_v<typename MessageTraits<Ids>::Payload>);
+             typename MessageTraits<Ids>::Payload p;
              std::memcpy(&p, data, sizeof(p));
              bus.publish<Ids>(p);
              return true;

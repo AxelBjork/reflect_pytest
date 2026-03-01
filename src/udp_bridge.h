@@ -6,8 +6,10 @@
 // subsequent bus messages to it over UDP (same wire format).
 
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
 
-#include <cstring>
+#include <atomic>
 #include <thread>
 
 #include "autonomous_msgs.h"
@@ -16,6 +18,23 @@
 #include "simulation_msgs.h"
 
 namespace ipc {
+
+struct PeerAddress {
+  uint32_t ip;
+  uint16_t port;
+  uint16_t _pad;
+
+  bool operator==(const PeerAddress& other) const {
+    return ip == other.ip && port == other.port;
+  }
+  bool operator!=(const PeerAddress& other) const {
+    return !(*this == other);
+  }
+
+  explicit operator bool() const {
+    return ip != 0 || port != 0;
+  }
+};
 
 class DOC_DESC(
     "Stateful bridge that relays IPC messages between the internal MessageBus and external UDP "
@@ -36,7 +55,7 @@ class DOC_DESC(
 
   static constexpr uint16_t kDefaultPort = 9000;
 
-  static bool is_connected();
+  bool is_connected() const;
 
   UdpBridge(MessageBus& bus);
   ~UdpBridge();
@@ -51,24 +70,37 @@ class DOC_DESC(
   int wake_[2];
   std::thread rx_thread_;
 
-  struct sockaddr_in peer_{};
+  std::atomic<PeerAddress> active_peer_{PeerAddress{0, 0, 0}};
 
   void rx_loop();
 
   // Serialize a typed payload to wire format and send via UDP.
   // Performs zero dynamic allocations and is lock-free.
   template <MsgId Id, typename Payload>
-  void forward_to_udp(const Payload& payload) {
-    if (!is_connected()) return;
+  int forward_to_udp(const Payload& payload) {
+    static_assert(std::is_trivially_copyable_v<Payload>);
+    PeerAddress peer_val = active_peer_.load(std::memory_order_acquire);
+    if (!peer_val) return -1;
 
-    constexpr size_t total_size = sizeof(uint16_t) + sizeof(Payload);
-    uint8_t buf[total_size];
+    sockaddr_in peer{};
+    peer.sin_family = AF_INET;
+    peer.sin_port = peer_val.port;
+    peer.sin_addr.s_addr = peer_val.ip;
 
     uint16_t id_raw = static_cast<uint16_t>(Id);
-    std::memcpy(buf, &id_raw, sizeof(uint16_t));
-    std::memcpy(buf + sizeof(uint16_t), &payload, sizeof(Payload));
+    struct iovec iov[2];
+    iov[0].iov_base = &id_raw;
+    iov[0].iov_len = sizeof(id_raw);
+    iov[1].iov_base = const_cast<Payload*>(&payload);
+    iov[1].iov_len = sizeof(Payload);
 
-    ::sendto(udp_fd_, buf, total_size, 0, reinterpret_cast<sockaddr*>(&peer_), sizeof(peer_));
+    struct msghdr msg = {};
+    msg.msg_name = &peer;
+    msg.msg_namelen = sizeof(peer);
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 2;
+
+    return ::sendmsg(udp_fd_, &msg, 0);
   }
 };
 

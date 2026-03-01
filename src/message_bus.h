@@ -6,7 +6,6 @@
 // threads start publishing. The start of any thread that publishes
 // serves as a memory barrier for the handler map.
 
-#include <any>
 #include <cstdint>
 #include <functional>
 #include <unordered_map>
@@ -28,15 +27,15 @@ class MessageBus {
   // Must be called before any threads start publishing.
   template <MsgId Id>
   void subscribe(std::function<void(const typename MessageTraits<Id>::Payload&)> h) {
-    handlers_[static_cast<uint16_t>(Id)].push_back([h](const std::any& data) {
-      h(std::any_cast<const typename MessageTraits<Id>::Payload&>(data));
+    handlers_[static_cast<uint16_t>(Id)].push_back([h](const void* data) {
+      h(*static_cast<const typename MessageTraits<Id>::Payload*>(data));
     });
   }
 
   // Publish a typed message through the bus (lock-free).
   template <MsgId Id>
   void publish(const typename MessageTraits<Id>::Payload& payload) {
-    dispatch(Id, std::any{payload});
+    dispatch(Id, &payload);
   }
 
   // Allow TypedPublisher to access private methods if needed.
@@ -44,9 +43,9 @@ class MessageBus {
   friend class TypedPublisher;
 
  private:
-  std::unordered_map<uint16_t, std::vector<std::function<void(const std::any&)>>> handlers_;
+  std::unordered_map<uint16_t, std::vector<std::function<void(const void*)>>> handlers_;
 
-  void dispatch(MsgId id, std::any payload);
+  void dispatch(MsgId id, const void* payload);
 };
 
 }  // namespace ipc

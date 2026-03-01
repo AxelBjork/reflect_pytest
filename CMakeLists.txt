@@ -68,5 +68,5 @@ if(SIL_OPTIMIZED)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -flto -g")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -O3 -flto -g")
     # Assembly view
-    # objdump -d --no-show-raw-insn --demangle build/sil_app > ./sil_app_verify.s
+    # objdump -d -C --no-show-raw-insn --no-addresses --demangle build/sil_app > build/sil_app.asm
 endif()
